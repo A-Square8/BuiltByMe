@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BuiltByMe — Code Extraction Studio</title>
+    <meta name="description"
+        content="Extract and analyze GitHub repositories with Tree-sitter powered code intelligence.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="generator.css">
+</head>
+
+<body>
+    <div id="app">
+        <header>
+            <div class="header-left">
+                <div class="logo-mark">
+                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                        <rect x="2" y="2" width="24" height="24" rx="6" fill="url(#logoGrad)" />
+                        <path d="M9 10L13 14L9 18" stroke="#fff" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                        <line x1="15" y1="18" x2="19" y2="18" stroke="#fff" stroke-width="2" stroke-linecap="round" />
+                        <defs>
+                            <linearGradient id="logoGrad" x1="2" y1="2" x2="26" y2="26">
+                                <stop stop-color="#F97316" />
+                                <stop offset="1" stop-color="#EA580C" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h1 class="logo">BuiltByMe</h1>
+                <span class="logo-badge">Studio</span>
+            </div>
+            <div class="header-right">
+                <div class="menu-container">
+                    <button class="menu-btn" id="menuBtn" aria-label="Menu">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5" stroke-linecap="round">
+                            <circle cx="12" cy="5" r="1" />
+                            <circle cx="12" cy="12" r="1" />
+                            <circle cx="12" cy="19" r="1" />
+                        </svg>
+                    </button>
+                    <div class="menu-dropdown" id="menuDropdown">
+                        <div class="menu-section">
+                            <div class="menu-section-title">Actions</div>
+                            <div class="menu-item" id="addProjectBtn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="12" y1="8" x2="12" y2="16" />
+                                    <line x1="8" y1="12" x2="16" y2="12" />
+                                </svg>
+                                New Project
+                            </div>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-section">
+                            <div class="menu-section-title">My Projects</div>
+                            <div id="projectsList" class="projects-list">
+                                <div class="menu-item disabled">No projects yet</div>
+                            </div>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-section">
+                            <div class="menu-section-title">Settings</div>
+                            <div class="menu-item" id="configBtn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="3" />
+                                    <path
+                                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                                </svg>
+                                Configuration
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main id="mainContent">
+            <div class="empty-state" id="emptyState">
+                <div class="empty-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.1)"
+                        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                </div>
+                <p>No project loaded</p>
+                <p class="sub">Click the menu icon and select <strong>New Project</strong> to get started</p>
+            </div>
+
+            <div class="project-view" id="projectView" style="display:none;">
+                <!-- Left Sidebar for Project Meta -->
+                <div class="project-sidebar">
+                    <div class="project-sidebar-header">
+                        <div class="project-sidebar-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path
+                                    d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+                            </svg>
+                        </div>
+                        <h2 id="projectTitle"></h2>
+                        <p id="projectDesc" class="project-sidebar-desc"></p>
+                    </div>
+                    <div class="project-sidebar-meta" id="projectMeta">
+                        <!-- Populated by app.js -->
+                    </div>
+                    <div class="project-sidebar-actions">
+                        <button class="sidebar-btn" id="viewContentBtn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                                <polyline points="10 9 9 9 8 9" />
+                            </svg>
+                            View Extracted Content
+                        </button>
+                        <button class="sidebar-btn" id="viewGeneratedBtn" style="border-color: rgba(249,115,22,0.3); color: var(--orange-400);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3-3 3 3"/></svg>
+                            View Generated Output
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Main Radial Generator Area -->
+                <div class="gen-main-area" id="generatorArea">
+                    <div class="gen-left-actions" style="position: absolute; left: 30px; top: 50%; transform: translateY(-50%); z-index: 10; width: 220px; display: flex; flex-direction: column; gap: 12px; background: rgba(255,255,255,0.03); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--dark-border2); backdrop-filter: blur(10px);">
+                        <div class="gen-field" style="margin-top: 12px;">
+                            <label style="color: #fff; font-size: 11px; margin-bottom: 4px;">Global Retrieval Strategy</label>
+                            <select class="gen-select" id="commonStrategy">
+                                <option value="1_pass">1 Call (Dump entire codebase into LLM)</option>
+                                <option value="2_pass">2 Calls (Skeleton followed by Deep Retrieval)</option>
+                            </select>
+                        </div>
+
+                        <button class="gen-hub-btn" id="genHubBtn" disabled>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            Generate All
+                        </button>
+                        <div class="gen-divider" style="margin: 4px 0;"></div>
+                        <div class="gen-field" style="margin-bottom: 0;">
+                            <label class="gen-field-label">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+                                Common API Key
+                            </label>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <select class="gen-select" id="commonSavedKeySelect">
+                                    <option value="">-- Select Saved Key --</option>
+                                    <option value="key1">My Personal Groq</option>
+                                </select>
+                                <div style="display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 10px; text-transform: uppercase;">
+                                    <span style="flex:1; height:1px; background:var(--dark-border);"></span> OR <span style="flex:1; height:1px; background:var(--dark-border);"></span>
+                                </div>
+                                <input class="gen-input" type="password" id="commonApiKey" placeholder="Paste custom API key...">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="gen-circle-area">
+                        <div class="gen-nodes-container" id="genNodesContainer"></div>
+                        <div class="gen-hub">
+                            <svg class="gen-progress-ring" viewBox="0 0 180 180">
+                                <circle class="ring-bg" cx="90" cy="90" r="86" />
+                                <circle class="ring-fill" id="genRingFill" cx="90" cy="90" r="86"
+                                    transform="rotate(-90 90 90)" />
+                            </svg>
+                            <span class="gen-hub-label">Project</span>
+                            <span class="gen-hub-project" id="genHubProject">—</span>
+                            <span class="gen-hub-progress" id="genHubProgress">0 / 14 sections</span>
+                        </div>
+                    </div>
+                    <!-- Settings Panel (Slides from right edge of main area) -->
+                    <div class="gen-panel" id="genPanel">
+                        <div class="gen-panel-header">
+                            <div>
+                                <div class="gen-panel-title" id="genPanelTitle">Section</div>
+                                <div class="gen-panel-subtitle" id="genPanelSubtitle">Description</div>
+                            </div>
+                            <button class="gen-panel-close" id="genPanelClose">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="gen-panel-body">
+                            <div class="gen-field">
+                                <label class="gen-field-label">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                        <path d="M2 17l10 5 10-5" />
+                                        <path d="M2 12l10 5 10-5" />
+                                    </svg>
+                                    AI Provider
+                                </label>
+                                <select class="gen-select" id="genProvider">
+                                    <option value="nvidia">Nvidia</option>
+                                    <option value="gemini">Gemini</option>
+                                    <option value="groq">Groq</option>
+                                </select>
+                            </div>
+                            <div class="gen-field" style="margin-top: 12px;">
+                                <label style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; color: #fff;">
+                                    Retrieval Strategy
+                                </label>
+                                <select class="gen-select" id="genStrategy">
+                                    <option value="1_pass">1 Call (Dump entire codebase into LLM)</option>
+                                    <option value="2_pass">2 Calls (Skeleton followed by Deep Retrieval)</option>
+                                </select>
+                            </div>
+                            <div class="gen-field">
+                                <label class="gen-field-label">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path
+                                            d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                                    </svg>
+                                    API Key
+                                </label>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <select class="gen-select" id="genSavedKeySelect">
+                                        <option value="">-- Select Saved Key --</option>
+                                        <option value="key1">My Personal Groq</option>
+                                    </select>
+                                    <div style="display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 10px; text-transform: uppercase;">
+                                        <span style="flex:1; height:1px; background:var(--dark-border);"></span> OR <span style="flex:1; height:1px; background:var(--dark-border);"></span>
+                                    </div>
+                                    <input class="gen-input" type="password" id="genApiKey"
+                                        placeholder="Paste custom API key...">
+                                </div>
+                            </div>
+                            <div class="gen-field">
+                                <label class="gen-field-label">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="4" y1="21" x2="4" y2="14" />
+                                        <line x1="4" y1="10" x2="4" y2="3" />
+                                        <line x1="12" y1="21" x2="12" y2="12" />
+                                        <line x1="12" y1="8" x2="12" y2="3" />
+                                        <line x1="20" y1="21" x2="20" y2="16" />
+                                        <line x1="20" y1="12" x2="20" y2="3" />
+                                        <line x1="1" y1="14" x2="7" y2="14" />
+                                        <line x1="9" y1="8" x2="15" y2="8" />
+                                        <line x1="17" y1="16" x2="23" y2="16" />
+                                    </svg>
+                                    Detail Level
+                                </label>
+                                <div class="gen-slider-group">
+                                    <div class="gen-slider-track" id="genSliderTrack">
+                                        <div class="gen-slider-fill" id="genSliderFill" style="width:50%"></div>
+                                        <div class="gen-slider-thumb" id="genSliderThumb" style="left:50%"></div>
+                                    </div>
+                                    <div class="gen-slider-labels">
+                                        <span>Short</span>
+                                        <span class="active">Medium</span>
+                                        <span>Detailed</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="gen-divider"></div>
+                            <div class="gen-toggle-row">
+                                <div class="gen-toggle-info">
+                                    <span class="gen-toggle-label">Skip Section</span>
+                                    <span class="gen-toggle-desc">Exclude from PDF entirely</span>
+                                </div>
+                                <button class="gen-toggle" id="genSkipToggle"></button>
+                            </div>
+                            <div class="gen-toggle-row">
+                                <div class="gen-toggle-info">
+                                    <span class="gen-toggle-label">Placeholder Mode</span>
+                                    <span class="gen-toggle-desc">Include heading, leave content blank</span>
+                                </div>
+                                <button class="gen-toggle" id="genPlaceholderToggle"></button>
+                            </div>
+                            <div class="gen-divider"></div>
+                            <div class="gen-field">
+                                <label class="gen-field-label">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                        <polyline points="14 2 14 8 20 8" />
+                                    </svg>
+                                    Page Limit
+                                </label>
+                                <div class="gen-page-picker">
+                                    <button class="gen-page-option" data-pages="1">1<span>page</span></button>
+                                    <button class="gen-page-option active" data-pages="2">2<span>pages</span></button>
+                                    <button class="gen-page-option" data-pages="3">3<span>pages</span></button>
+                                </div>
+                            </div>
+                            <div class="gen-field">
+                                <label class="gen-field-label">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                    </svg>
+                                    Custom Instructions
+                                </label>
+                                <textarea class="gen-textarea" id="genCustomInstructions"
+                                    placeholder="Extra context for the AI..."></textarea>
+                            </div>
+                            <div class="gen-divider"></div>
+                            <div class="gen-field" style="margin-bottom: 0;">
+                                <button class="gen-btn gen-btn-secondary" id="genGenerateSectionBtn"
+                                    style="width: 100%;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polygon points="5 3 19 12 5 21 5 3" />
+                                    </svg>
+                                    Generate This Section Only
+                                </button>
+                            </div>
+                        </div>
+                        <div class="gen-panel-actions">
+                            <button class="gen-btn gen-btn-primary" id="genRegenerateBtn">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10" />
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                                </svg>
+                                Regenerate
+                            </button>
+                            <button class="gen-btn gen-btn-lock" id="genLockBtn">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                    <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                                </svg>
+                                Lock
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Terminal Logger -->
+                    <div class="gen-terminal" id="genTerminal">
+                        <div class="gen-terminal-header">
+                            <span style="display: flex; align-items: center; gap: 6px;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                                Terminal Activity
+                            </span>
+                            <button class="gen-terminal-close" onclick="document.getElementById('genTerminal').style.display='none'">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
+                        <div class="gen-terminal-content" id="genTerminalContent"></div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+
+        <!-- Add Project Modal -->
+        <div class="modal-overlay" id="modalOverlay" style="display:none;">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="16" />
+                            <line x1="8" y1="12" x2="16" y2="12" />
+                        </svg>
+                        Add Project
+                    </h3>
+                    <button class="modal-close" id="modalClose">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="repoUrl">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                            </svg>
+                            GitHub Repository URL
+                        </label>
+                        <input type="text" id="repoUrl" placeholder="https://github.com/user/repo">
+                    </div>
+                    <div class="form-group">
+                        <label for="accessToken">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                            Access Token <span class="optional">(optional — uses saved PAT if set)</span>
+                        </label>
+                        <input type="password" id="accessToken" placeholder="ghp_xxxxxxxxxxxx or leave blank">
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" id="startExtraction">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="16 16 12 12 8 16" />
+                                <line x1="12" y1="12" x2="12" y2="21" />
+                                <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+                            </svg>
+                            Start Extraction
+                        </button>
+                    </div>
+                    <div class="progress-area" id="progressArea" style="display:none;">
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="progressBar"></div>
+                        </div>
+                        <p class="progress-text" id="progressText">Starting...</p>
+                        <p class="progress-file" id="progressFile"></p>
+                    </div>
+                    <div class="error-area" id="errorArea" style="display:none;">
+                        <p class="error-text" id="errorText"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Config Modal -->
+        <div class="modal-overlay" id="configOverlay" style="display:none;">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3" />
+                            <path
+                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        </svg>
+                        Configuration
+                    </h3>
+                    <button class="modal-close" id="configClose">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="config-section">
+                        <div class="config-section-header">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path
+                                    d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+                            </svg>
+                            <h4>GitHub Personal Access Token</h4>
+                        </div>
+                        <p class="config-description">
+                            Store your GitHub PAT permanently so you don't need to enter it each time.
+                            Required for private repositories and to avoid rate limits.
+                        </p>
+                        <div class="form-group">
+                            <label for="configPat">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path
+                                        d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                                </svg>
+                                Personal Access Token
+                            </label>
+                            <div class="pat-input-group">
+                                <input type="password" id="configPat" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+                                <button class="btn-icon" id="togglePatVisibility" title="Toggle visibility">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="eyeIcon">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                        <circle cx="12" cy="12" r="3" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="config-status" id="configStatus" style="display:none;"></div>
+                        <div class="config-actions">
+                            <button class="btn btn-primary" id="savePatBtn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                                    <polyline points="17 21 17 13 7 13 7 21" />
+                                    <polyline points="7 3 7 8 15 8" />
+                                </svg>
+                                Save Token
+                            </button>
+                            <button class="btn btn-danger" id="clearPatBtn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path
+                                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                </svg>
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="gen-divider" style="margin: 20px 0;"></div>
+                    <div class="config-section">
+                        <div class="config-section-header">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+                            <h4>Saved API Keys</h4>
+                        </div>
+                        <p class="config-description">
+                            Manage your common API keys to quickly select them later.
+                        </p>
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                            <input class="gen-input" type="text" id="newKeyName" placeholder="Key Name (e.g. My Groq)" style="flex: 1;">
+                            <select class="gen-select" id="newKeyProvider" style="width: 120px; flex-shrink: 0;">
+                                <option value="nvidia">Nvidia</option>
+                                <option value="gemini">Gemini</option>
+                                <option value="groq">Groq</option>
+                            </select>
+                        </div>
+                        <div class="pat-input-group" style="margin-bottom: 16px;">
+                            <input class="gen-input" type="password" id="newKeyValue" placeholder="API Key...">
+                            <button class="btn btn-primary" id="addSavedKeyBtn" style="width: auto;">Add</button>
+                        </div>
+                        <div id="savedKeysList" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto;">
+                            <!-- Placeholder item for presentation since logic is skipped -->
+                            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--dark-border2); border-radius: var(--radius-sm);">
+                                <div style="display: flex; flex-direction: column; gap: 2px;">
+                                    <span style="font-size: 13px; font-weight: 600; color: #fff;">My Personal Groq</span>
+                                    <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Groq</span>
+                                </div>
+                                <button class="project-delete-btn" title="Delete Key">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Viewer Full-Screen Overlay -->
+        <div class="content-viewer" id="contentViewer" style="display:none;">
+            <div class="cv-header">
+                <div class="cv-header-left">
+                    <h2 id="cvTitle">Project Content</h2>
+                    <span class="cv-subtitle" id="cvSubtitle"></span>
+                </div>
+                <button class="cv-close" id="cvClose" title="Close viewer">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="cv-tabs">
+                <button class="cv-tab active" data-tab="files" id="tabFiles">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                    Files
+                </button>
+                <button class="cv-tab" data-tab="commits" id="tabCommits">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="4" />
+                        <line x1="1.05" y1="12" x2="7" y2="12" />
+                        <line x1="17.01" y1="12" x2="22.96" y2="12" />
+                    </svg>
+                    Commits
+                </button>
+            </div>
+            <div class="cv-body">
+                <div class="cv-panel active" id="panelFiles">
+                    <div class="cv-sidebar" id="fileSidebar">
+                        <div class="cv-search">
+                            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8" />
+                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                            <input type="text" id="fileSearch" placeholder="Search files...">
+                        </div>
+                        <div class="cv-file-list" id="fileList"></div>
+                    </div>
+                    <div class="cv-content" id="fileContent">
+                        <div class="cv-empty-content">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.1)"
+                                stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="15 18 9 12 15 6" />
+                            </svg>
+                            <p>Select a file to view its content</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="cv-panel" id="panelCommits">
+                    <div class="cv-commits-list" id="commitsList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- GENERATED CONTENT MODAL -->
+    <div class="content-viewer" id="generatedOverlay" style="display: none;">
+        <div class="cv-header">
+            <div class="cv-header-left">
+                <h2 id="generatedProjectTitle">Generated AI Content</h2>
+                <span class="cv-subtitle">View and manage extracted knowledge</span>
+            </div>
+            <button class="cv-close" id="closeGeneratedBtn" title="Close viewer">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+            </button>
+        </div>
+        <div class="cv-body">
+            <div class="cv-panel active" style="flex-direction: row; display: flex; height: 100%;">
+                <!-- Sections List -->
+                <div class="cv-sidebar" style="width: 280px; display: flex; flex-direction: column; flex-shrink: 0; background: var(--dark-surface); border-right: 1px solid var(--dark-border);">
+                    <div class="cv-search" style="padding: 16px; border-bottom: 1px solid var(--dark-border);">
+                        <h4 style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.8px;">Saved Sections</h4>
+                    </div>
+                    <div id="generatedList" class="cv-file-list" style="flex: 1; overflow-y: auto;">
+                        <!-- List populated via JS -->
+                    </div>
+                </div>
+                
+                <!-- Content Viewer -->
+                <div class="cv-content" style="flex: 1; display: flex; flex-direction: column; background: var(--dark-bg); overflow: hidden;">
+                    <div class="cv-file-detail-header" style="flex-shrink: 0; padding: 18px 24px; background: var(--dark-surface); border-bottom: 1px solid var(--dark-border); display: flex; justify-content: space-between; align-items: center;">
+                        <h3 id="generatedViewerTitle" style="font-size: 15px; font-weight: 600; color: var(--white); font-family: var(--font-sans);">Select a section</h3>
+                        <button id="deleteGeneratedBtn" class="btn btn-danger" style="display: none; padding: 8px 14px; font-size: 12px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Delete Section
+                        </button>
+                    </div>
+                    <div style="flex: 1; overflow-y: auto; padding: 24px;">
+                        <pre id="generatedViewerContent" style="margin: 0; background: #0d0d10; padding: 24px; border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 14px; line-height: 1.7; color: #d4d4d4; white-space: pre-wrap; min-height: 100%; border: 1px solid var(--dark-border);"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="app.js"></script>
+    <script src="generator.js"></script>
+</body>
+</html>

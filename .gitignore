@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# Database
+*.sqlite
+*.db
+
+# Environment Variables
+.env
+
+# BuiltByMe specific
+.master.key
+config.json
+my_projects/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
