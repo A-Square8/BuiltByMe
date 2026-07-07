@@ -175,6 +175,14 @@ class ProjectDB:
         )
         self.conn.commit()
 
+    def get_generated_section(self, section_id):
+        row = self.conn.execute(
+            'SELECT * FROM generated_sections WHERE section_id = ?', (section_id,)
+        ).fetchone()
+        if row:
+            return dict(row)
+        return None
+
     def get_generated_sections(self):
         rows = self.conn.execute('SELECT * FROM generated_sections ORDER BY section_id').fetchall()
         return [dict(r) for r in rows]

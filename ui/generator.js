@@ -42,9 +42,9 @@ function initSectionStates() {
     sectionStates = {};
     SECTIONS.forEach(s => {
         sectionStates[s.id] = {
-            provider: 'groq', apiKey: '', detailLevel: 1,
+            provider: 'groq', apiKey: '', detailLevel: (s.id === 6 || s.id === 14) ? 2 : 1,
             skip: false, placeholder: false, locked: false,
-            customInstructions: '', pageLimit: 2, strategy: '1_pass',
+            customInstructions: '', strategy: '1_pass',
             status: 'idle', // idle | generating | completed
         };
     });
@@ -157,10 +157,7 @@ function openPanel(id) {
     // Toggles
     setToggle('genSkipToggle', state.skip);
     setToggle('genPlaceholderToggle', state.placeholder);
-    // Page Limit
-    document.querySelectorAll('.gen-page-option').forEach(el => {
-        el.classList.toggle('active', parseInt(el.dataset.pages) === state.pageLimit);
-    });
+
     // Custom Instructions
     document.getElementById('genCustomInstructions').value = state.customInstructions;
     // Lock button
@@ -272,15 +269,7 @@ function initGeneratorEvents() {
     document.getElementById('genSkipToggle').addEventListener('click', () => toggleSwitch('genSkipToggle', 'skip'));
     document.getElementById('genPlaceholderToggle').addEventListener('click', () => toggleSwitch('genPlaceholderToggle', 'placeholder'));
 
-    // Page limit
-    document.querySelectorAll('.gen-page-option').forEach(el => {
-        el.addEventListener('click', () => {
-            if (!activeSection) return;
-            const pages = parseInt(el.dataset.pages);
-            sectionStates[activeSection].pageLimit = pages;
-            document.querySelectorAll('.gen-page-option').forEach(o => o.classList.toggle('active', parseInt(o.dataset.pages) === pages));
-        });
-    });
+
 
     // Custom instructions
     document.getElementById('genCustomInstructions').addEventListener('input', e => {
@@ -299,7 +288,7 @@ function initGeneratorEvents() {
     document.getElementById('genRegenerateBtn').addEventListener('click', () => {
         if (!activeSection) return;
         const state = sectionStates[activeSection];
-        if (state.locked || state.skip) return;
+        if (state.locked || state.skip || state.placeholder) return;
         state.status = 'generating';
         renderNodes();
         updateProgressRing();
@@ -319,7 +308,7 @@ function initGeneratorEvents() {
             let delay = 0;
             SECTIONS.forEach(sec => {
                 const state = sectionStates[sec.id];
-                if (state.skip || state.locked) return;
+                if (state.skip || state.locked || state.placeholder) return;
                 delay += 400;
                 setTimeout(() => { state.status = 'generating'; renderNodes(); updateProgressRing(); }, delay);
                 setTimeout(() => { state.status = 'completed'; renderNodes(); updateProgressRing(); }, delay + 1500 + Math.random() * 1000);
@@ -333,7 +322,7 @@ function initGeneratorEvents() {
         genSectionBtn.addEventListener('click', async () => {
             if (!activeSection) return;
             const state = sectionStates[activeSection];
-            if (state.locked || state.skip) return;
+            if (state.locked || state.skip || state.placeholder) return;
             
             const projectName = document.getElementById('genHubProject').textContent;
             if (!projectName || projectName === 'Project') {
@@ -351,28 +340,113 @@ function initGeneratorEvents() {
             updateProgressRing();
             
             logToTerminal(`Starting extraction for Section ${activeSection}`);
-            logToTerminal(`Strategy: ${state.strategy || '1_pass'}`);
+            if (activeSection !== 6) {
+                logToTerminal(`Strategy: ${state.strategy || '1_pass'}`);
+            }
             logToTerminal(`Connecting to ${state.provider} via LLM Gateway...`);
             
             try {
-                const res = await fetch(`/api/project/${projectName}/generate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        section_id: activeSection,
-                        provider: state.provider,
-                        api_key: state.apiKey,
-                        strategy: state.strategy || '1_pass',
-                        custom_instructions: state.customInstructions
-                    })
-                });
-                
-                logToTerminal(`Received response from backend.`);
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Failed to generate');
-                
-                logToTerminal(`Success! Section ${activeSection} saved to project DB.`);
-                state.status = 'completed';
+                if (activeSection === 6) {
+                    // --- SECTION 6: CHUNKED PER-FRAMEWORK GENERATION ---
+                    logToTerminal(`Phase 0: Discovering frameworks...`);
+                    
+                    // Call discovery phase
+                    const discRes = await fetch(`/api/project/${projectName}/generate_s6`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            provider: state.provider,
+                            api_key: state.apiKey,
+                            phase: 'discovery',
+                            detail_level: state.detailLevel,
+                            custom_instructions: state.customInstructions
+                        })
+                    });
+                    
+                    const discData = await discRes.json();
+                    if (!discRes.ok) throw new Error(discData.error || 'Failed during discovery');
+                    
+                    const frameworks = discData.frameworks || [];
+                    const completed = discData.completed || [];
+                    
+                    logToTerminal(`Discovered ${frameworks.length} frameworks to analyze.`);
+                    if (completed.length > 0) {
+                        logToTerminal(`Already completed: ${completed.join(', ')}`);
+                    }
+                    
+                    // Phase 1: Deep Dives
+                    for (let i = 0; i < frameworks.length; i++) {
+                        const fw = frameworks[i];
+                        if (completed.includes(fw.name)) {
+                            continue; // Skip already completed
+                        }
+                        
+                        logToTerminal(`Phase 1: Generating deep dive for ${fw.name} (${i + 1}/${frameworks.length})...`);
+                        
+                        const diveRes = await fetch(`/api/project/${projectName}/generate_s6`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                provider: state.provider,
+                                api_key: state.apiKey,
+                                phase: 'deep_dive',
+                                framework_index: i,
+                                detail_level: state.detailLevel,
+                                custom_instructions: state.customInstructions
+                            })
+                        });
+                        
+                        const diveData = await diveRes.json();
+                        if (!diveRes.ok) {
+                            logToTerminal(`Generation paused or failed at ${fw.name}.`);
+                            throw new Error(diveData.error || `Failed on framework ${fw.name}`);
+                        }
+                        
+                        if (diveData.skipped) {
+                            logToTerminal(`[Skipped] ${fw.name} already completed.`);
+                        } else {
+                            logToTerminal(`[Saved] Deep dive for ${fw.name} completed.`);
+                        }
+                    }
+                    
+                    logToTerminal(`Success! All frameworks for Section 6 analyzed and saved.`);
+                    state.status = 'completed';
+                    
+                } else {
+                    // --- STANDARD GENERATION FOR OTHER SECTIONS ---
+                    const res = await fetch(`/api/project/${projectName}/generate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            section_id: activeSection,
+                            provider: state.provider,
+                            api_key: state.apiKey,
+                            strategy: state.strategy || '1_pass',
+                            detail_level: state.detailLevel,
+                            custom_instructions: state.customInstructions
+                        })
+                    });
+                    
+                    logToTerminal(`Received response from backend.`);
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Failed to generate');
+                    
+                    // Log pass details from backend
+                    if (data.passes && Array.isArray(data.passes)) {
+                        data.passes.forEach(p => {
+                            logToTerminal(`  Pass ${p.pass}: ${p.info}`);
+                            if (p.requested_files && p.requested_files.length > 0) {
+                                logToTerminal(`  Requested files: ${p.requested_files.join(', ')}`);
+                            }
+                            if (p.reasoning) {
+                                logToTerminal(`  Reasoning: ${p.reasoning}`);
+                            }
+                        });
+                    }
+                    
+                    logToTerminal(`Success! Section ${activeSection} saved to project DB.`);
+                    state.status = 'completed';
+                }
             } catch (err) {
                 console.error(err);
                 logToTerminal(`ERROR: ${err.message}`);
@@ -580,3 +654,75 @@ window.syncGeneratedStatus = function(completedIds) {
     renderNodes();
     updateProgressRing();
 };
+
+// ===== Draggable Terminal =====
+(function initDraggableTerminal() {
+    function setup() {
+        const terminal = document.getElementById('genTerminal');
+        const header = document.getElementById('genTerminalHeader');
+        const clearBtn = document.getElementById('genTerminalClear');
+        const closeBtn = document.getElementById('genTerminalCloseBtn');
+        if (!terminal || !header) return;
+
+        let isDragging = false;
+        let offsetX = 0, offsetY = 0;
+
+        header.addEventListener('mousedown', (e) => {
+            // Don't drag if clicking a button inside the header
+            if (e.target.closest('button')) return;
+            isDragging = true;
+            const rect = terminal.getBoundingClientRect();
+            offsetX = e.clientX - rect.left;
+            offsetY = e.clientY - rect.top;
+            // Switch from bottom/right to top/left positioning
+            terminal.style.left = rect.left + 'px';
+            terminal.style.top = rect.top + 'px';
+            terminal.style.right = 'auto';
+            terminal.style.bottom = 'auto';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            let newX = e.clientX - offsetX;
+            let newY = e.clientY - offsetY;
+            // Clamp to viewport
+            const w = terminal.offsetWidth;
+            const h = terminal.offsetHeight;
+            newX = Math.max(0, Math.min(newX, window.innerWidth - w));
+            newY = Math.max(0, Math.min(newY, window.innerHeight - h));
+            terminal.style.left = newX + 'px';
+            terminal.style.top = newY + 'px';
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        // Clear button
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                const content = document.getElementById('genTerminalContent');
+                if (content) content.innerHTML = '';
+            });
+        }
+
+        // Close button
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                terminal.style.display = 'none';
+                // Reset position to default bottom-right
+                terminal.style.left = '';
+                terminal.style.top = '';
+                terminal.style.right = '20px';
+                terminal.style.bottom = '20px';
+            });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setup);
+    } else {
+        setup();
+    }
+})();

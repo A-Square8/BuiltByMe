@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BuiltByMe — Code Extraction Studio</title>
+    <title>BuiltByMe</title>
     <meta name="description"
         content="Extract and analyze GitHub repositories with Tree-sitter powered code intelligence.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -129,6 +129,10 @@
                         <button class="sidebar-btn" id="viewGeneratedBtn" style="border-color: rgba(249,115,22,0.3); color: var(--orange-400);">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3-3 3 3"/></svg>
                             View Generated Output
+                        </button>
+                        <button class="sidebar-btn" id="generatePdfBtn" style="border-color: rgba(168,85,247,0.3); color: var(--purple-400);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Generate PDF
                         </button>
                     </div>
                 </div>
@@ -288,21 +292,7 @@
                                 <button class="gen-toggle" id="genPlaceholderToggle"></button>
                             </div>
                             <div class="gen-divider"></div>
-                            <div class="gen-field">
-                                <label class="gen-field-label">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                        <polyline points="14 2 14 8 20 8" />
-                                    </svg>
-                                    Page Limit
-                                </label>
-                                <div class="gen-page-picker">
-                                    <button class="gen-page-option" data-pages="1">1<span>page</span></button>
-                                    <button class="gen-page-option active" data-pages="2">2<span>pages</span></button>
-                                    <button class="gen-page-option" data-pages="3">3<span>pages</span></button>
-                                </div>
-                            </div>
+
                             <div class="gen-field">
                                 <label class="gen-field-label">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -348,14 +338,19 @@
 
                     <!-- Terminal Logger -->
                     <div class="gen-terminal" id="genTerminal">
-                        <div class="gen-terminal-header">
+                        <div class="gen-terminal-header" id="genTerminalHeader">
                             <span style="display: flex; align-items: center; gap: 6px;">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
                                 Terminal Activity
                             </span>
-                            <button class="gen-terminal-close" onclick="document.getElementById('genTerminal').style.display='none'">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                            </button>
+                            <div class="gen-terminal-header-actions">
+                                <button class="gen-terminal-btn" id="genTerminalClear" title="Clear terminal">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
+                                <button class="gen-terminal-close" id="genTerminalCloseBtn" title="Close terminal">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+                            </div>
                         </div>
                         <div class="gen-terminal-content" id="genTerminalContent"></div>
                     </div>

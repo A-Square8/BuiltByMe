@@ -326,6 +326,55 @@ if ($('viewGeneratedBtn')) {
     });
 }
 
+if ($('generatePdfBtn')) {
+    $('generatePdfBtn').addEventListener('click', async () => {
+        if (!currentProject) return;
+        const btn = $('generatePdfBtn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating...';
+        btn.disabled = true;
+        try {
+            // Collect skip/placeholder states from generator UI
+            const skipSections = [];
+            const placeholderSections = [];
+            if (typeof sectionStates !== 'undefined') {
+                Object.entries(sectionStates).forEach(([id, state]) => {
+                    const sectionId = parseInt(id);
+                    if (state.skip) skipSections.push(sectionId);
+                    if (state.placeholder) placeholderSections.push(sectionId);
+                });
+            }
+            
+            const res = await fetch(`/api/project/${currentProject}/pdf`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    skip_sections: skipSections,
+                    placeholder_sections: placeholderSections
+                })
+            });
+            if (!res.ok) throw new Error('Failed to generate PDF');
+            
+            // Trigger file download
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentProject}_revision.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error(e);
+            alert('Failed to generate PDF: ' + e.message);
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    });
+}
+
 if ($('closeGeneratedBtn')) {
     $('closeGeneratedBtn').addEventListener('click', () => {
         $('generatedOverlay').style.display = 'none';

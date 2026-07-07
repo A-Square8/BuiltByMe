@@ -25,3 +25,4 @@ my_projects/
 .vscode/
 .idea/
 .DS_Store
+flask.log

@@ -251,11 +251,13 @@ header {
 
 /* ===== Terminal Component ===== */
 .gen-terminal {
-    position: absolute;
+    position: fixed;
     bottom: 20px;
     right: 20px;
-    width: 380px;
-    height: 220px;
+    width: 420px;
+    height: 240px;
+    min-width: 300px;
+    min-height: 150px;
     background: rgba(10, 10, 15, 0.95);
     border: 1px solid var(--dark-border2);
     border-radius: var(--radius-md);
@@ -263,8 +265,9 @@ header {
     flex-direction: column;
     overflow: hidden;
     backdrop-filter: blur(10px);
-    z-index: 50;
-    box-shadow: var(--shadow-lg);
+    z-index: 9999;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    resize: both;
 }
 .gen-terminal-header {
     background: rgba(255,255,255,0.05);
@@ -278,7 +281,20 @@ header {
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid var(--dark-border2);
+    cursor: grab;
+    user-select: none;
 }
+.gen-terminal-header:active { cursor: grabbing; }
+.gen-terminal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.gen-terminal-btn {
+    background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px;
+    display: flex; align-items: center; transition: color 0.15s;
+}
+.gen-terminal-btn:hover { color: var(--white); }
 .gen-terminal-close {
     background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px;
 }

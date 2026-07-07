@@ -1,14 +1,25 @@
 import os
 import json
 import threading
+import io
+import textwrap
+import base64
+import zlib
 from cryptography.fernet import Fernet
-# pyrefly: ignore [missing-import]
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
+import traceback
 from flask_cors import CORS
 from extraction.pipeline import ExtractionPipeline
 from extraction.database import ProjectDB
 from extraction.llm_gateway import generate_content
-from extraction.prompts import SECTION_SCHEMAS, SECTION_PROMPTS
+from extraction.prompts import (
+    SECTION_SCHEMAS, SECTION_PROMPTS,
+    FileRetrievalRequest, FILE_RETRIEVAL_PROMPT,
+    FrameworkDiscovery, FRAMEWORK_DISCOVERY_PROMPT,
+    FrameworkDeepDive, FRAMEWORK_DEEP_DIVE_PROMPT,
+    Section3Architecture, Section4Environment,
+    Section5CoreFunctions, Section7DesignDecisions, Section8FailureLog
+)
 
 app = Flask(__name__, static_folder='ui', static_url_path='')
 CORS(app)
@@ -248,6 +259,7 @@ def generate_section(project_name):
     api_key = data.get('api_key')
     strategy = data.get('strategy', '1_pass')
     custom_instructions = data.get('custom_instructions', '')
+    detail_level = data.get('detail_level', 1)  # 0=Short, 1=Medium, 2=Detailed
 
     if not provider or not api_key:
         return jsonify({'error': 'Provider and API key are required'}), 400
@@ -279,30 +291,174 @@ def generate_section(project_name):
         context_str += f"Description: {info.get('description')}\n"
         context_str += f"Language: {info.get('language')}\n\n"
         
-        context_str += "Files in repository:\n"
-        for f in files:
-            context_str += f"- {f['path']} ({f['size']} bytes)\n"
-            
-        # Add README content if it exists
-        readme_file = next((f for f in files if 'readme' in f['path'].lower()), None)
-        if readme_file:
-            blocks = db.get_code_blocks(readme_file['id'])
-            readme_content = "".join([b['content'] for b in blocks if b['content']])
-            if readme_content:
-                context_str += f"\n\n--- README.md ---\n{readme_content}\n--- END README ---\n"
-                
-        # If strategy is 1_pass, we should also include all code content
-        if strategy == '1_pass':
-            context_str += "\n\n--- ENTIRE CODEBASE ---\n"
+        passes_log = []  # Track pass info for frontend terminal
+        
+        if section_id == 2:
+            # For section 2, we ONLY want unique imports across all files.
+            all_imports = set()
             for f in files:
-                if 'readme' in f['path'].lower(): continue
-                blocks = db.get_code_blocks(f['id'])
-                file_content = "".join([b['content'] for b in blocks if b['content']])
-                if file_content:
-                    context_str += f"\nFile: {f['path']}\n{file_content}\n"
-            context_str += "--- END ENTIRE CODEBASE ---\n"
+                if f.get('metadata'):
+                    try:
+                        meta = json.loads(f['metadata']) if isinstance(f['metadata'], str) else f['metadata']
+                        
+                        imports = meta.get('imports', [])
+                        if isinstance(imports, list):
+                            all_imports.update(imports)
+                        includes = meta.get('includes', [])
+                        if isinstance(includes, list):
+                            all_imports.update(includes)
+                        uses = meta.get('uses', [])
+                        if isinstance(uses, list):
+                            all_imports.update(uses)
+                    except json.JSONDecodeError:
+                        pass
+            
+            context_str += "Unique Imports Found in Project:\n"
+            for imp in sorted(all_imports):
+                context_str += f"- {imp}\n"
+            passes_log.append({'pass': 1, 'info': 'Import-only mode for Tech Stack section'})
+        else:
+            context_str += "Files in repository:\n"
+            for f in files:
+                context_str += f"- {f['path']} ({f['size']} bytes)\n"
+            
+            # Add commit history for Section 8 (Failure Log) - LLM can analyze commit messages for evidence of fixes/bugs
+            if section_id == 8:
+                commits = db.get_commits()
+                if commits:
+                    context_str += "\n\n--- COMMIT HISTORY (recent 100) ---\n"
+                    for c in commits[:100]:
+                        context_str += f"[{c.get('sha', '')}] {c.get('date', '')} - {c.get('message', '').split(chr(10))[0]}\n"
+                    context_str += "--- END COMMIT HISTORY ---\n"
+                
+            # Add README content if it exists
+            readme_file = next((f for f in files if 'readme' in f['path'].lower()), None)
+            if readme_file:
+                blocks = db.get_code_blocks(readme_file['id'])
+                readme_content = "".join([b['content'] for b in blocks if b['content']])
+                if readme_content:
+                    context_str += f"\n\n--- README.md ---\n{readme_content}\n--- END README ---\n"
+                    
+            if strategy == '1_pass':
+                # 1-pass: dump entire codebase into context
+                context_str += "\n\n--- ENTIRE CODEBASE ---\n"
+                for f in files:
+                    if 'readme' in f['path'].lower(): continue
+                    blocks = db.get_code_blocks(f['id'])
+                    file_content = "".join([b['content'] for b in blocks if b['content']])
+                    if file_content:
+                        context_str += f"\nFile: {f['path']}\n{file_content}\n"
+                context_str += "--- END ENTIRE CODEBASE ---\n"
+                passes_log.append({'pass': 1, 'info': 'Full codebase dump (1-pass)'})
+                
+            elif strategy == '2_pass':
+                # ===== PASS 1: Build skeleton and ask LLM which files it needs =====
+                skeleton_str = context_str  # Already has project info + file list + README
+                skeleton_str += "\n\n--- FILE SKELETON WITH METADATA ---\n"
+                for f in files:
+                    if 'readme' in f['path'].lower():
+                        continue
+                    skeleton_str += f"\nFile: {f['path']} | Language: {f.get('language', 'unknown')} | Size: {f['size']} bytes\n"
+                    # Add metadata summary (imports, class/function names)
+                    if f.get('metadata'):
+                        try:
+                            meta = json.loads(f['metadata']) if isinstance(f['metadata'], str) else f['metadata']
+                            imports = meta.get('imports', []) or meta.get('includes', []) or meta.get('uses', [])
+                            if imports:
+                                skeleton_str += f"  Imports: {', '.join(imports[:20])}\n"
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    # Add code block names (class/function signatures without content)
+                    blocks = db.get_code_blocks(f['id'])
+                    block_names = []
+                    for b in blocks:
+                        if b.get('block_type') in ('class', 'function', 'method') and b.get('name'):
+                            prefix = b['block_type']
+                            parent = f" (in {b['parent_name']})" if b.get('parent_name') else ''
+                            block_names.append(f"{prefix} {b['name']}{parent}")
+                    if block_names:
+                        skeleton_str += f"  Definitions: {', '.join(block_names[:15])}\n"
+                skeleton_str += "--- END FILE SKELETON ---\n"
+                
+                # Get the section description for context
+                section_names_map = {
+                    1: 'Project Overview', 2: 'Tech Stack', 3: 'Architecture & Module Map',
+                    4: 'Environment & Secrets', 5: 'Core Functions & Classes',
+                    6: 'Technology Deep Dives', 7: 'Design Decisions',
+                    8: 'Failure Log & Learnings', 9: 'APIs & Interfaces',
+                    10: 'Data Models & Storage', 11: 'Testing Strategy',
+                    12: 'Scalability & Production', 13: 'Deployment & Infra',
+                    14: 'Interview Question Bank'
+                }
+                section_topic = section_names_map.get(section_id, f'Section {section_id}')
+                
+                retrieval_user_prompt = (
+                    f"I need to generate the following documentation section: **{section_topic}**\n\n"
+                    f"Please analyze the file skeleton below and tell me which files I should retrieve "
+                    f"the full source code for.\n\n{skeleton_str}"
+                )
+                
+                retrieval_result = generate_content(
+                    provider=provider,
+                    api_key=api_key,
+                    system_prompt=FILE_RETRIEVAL_PROMPT,
+                    user_prompt=retrieval_user_prompt,
+                    response_schema=FileRetrievalRequest
+                )
+                
+                # Parse the requested files
+                if hasattr(retrieval_result, 'model_dump'):
+                    retrieval_data = retrieval_result.model_dump()
+                else:
+                    retrieval_data = retrieval_result
+                    
+                requested_paths = retrieval_data.get('requested_files', [])
+                reasoning = retrieval_data.get('reasoning', '')
+                
+                # Cap at 15 files
+                requested_paths = requested_paths[:15]
+                
+                passes_log.append({
+                    'pass': 1,
+                    'info': f'LLM analyzed skeleton and requested {len(requested_paths)} files',
+                    'reasoning': reasoning,
+                    'requested_files': requested_paths
+                })
+                
+                # ===== PASS 2: Fetch requested files and build focused context =====
+                # Build a path->file lookup
+                file_lookup = {f['path']: f for f in files}
+                
+                context_str += "\n\n--- SELECTED SOURCE CODE (retrieved via 2-pass) ---\n"
+                retrieved_count = 0
+                for path in requested_paths:
+                    file_record = file_lookup.get(path)
+                    if not file_record:
+                        continue
+                    if 'readme' in path.lower():
+                        continue  # Already included above
+                    blocks = db.get_code_blocks(file_record['id'])
+                    file_content = "".join([b['content'] for b in blocks if b['content']])
+                    if file_content:
+                        context_str += f"\nFile: {path}\n{file_content}\n"
+                        retrieved_count += 1
+                context_str += "--- END SELECTED SOURCE CODE ---\n"
+                
+                passes_log.append({
+                    'pass': 2,
+                    'info': f'Retrieved {retrieved_count} files for focused generation'
+                })
 
         system_prompt = SECTION_PROMPTS[section_id]
+        
+        # Inject detail level instructions
+        detail_instructions = {
+            0: "\n\nDETAIL LEVEL: SHORT. Keep all responses brief and concise. Use bullet points over paragraphs. Limit explanations to 1-2 sentences each. Prioritize breadth over depth.",
+            1: "\n\nDETAIL LEVEL: MEDIUM. Provide balanced detail — 2-3 sentences for paragraph fields. Include enough technical depth to be interview-ready without being exhaustive.",
+            2: "\n\nDETAIL LEVEL: DETAILED. Provide comprehensive, in-depth analysis. Use 5-8 sentences for paragraph fields. Include technical nuances, edge cases, trade-offs, and implementation specifics. This should be thorough enough for a senior-level deep-dive discussion."
+        }
+        system_prompt += detail_instructions.get(detail_level, detail_instructions[1])
+        
         if custom_instructions:
             system_prompt += f"\n\nUser Custom Instructions:\n{custom_instructions}"
             
@@ -318,16 +474,254 @@ def generate_section(project_name):
         
         content = result.model_dump() if hasattr(result, 'model_dump') else result
         
-        section_names = {1: 'Project Overview'}
+        section_names = {
+            1: 'Project Overview', 2: 'Tech Stack', 3: 'Architecture & Module Map',
+            4: 'Environment & Secrets', 5: 'Core Functions & Classes',
+            7: 'Design Decisions', 8: 'Failure Log & Learnings'
+        }
         
         db.save_generated_section(section_id, section_names.get(section_id, f'Section {section_id}'), content)
         
-        return jsonify({'message': 'Success', 'content': content})
+        return jsonify({'message': 'Success', 'content': content, 'passes': passes_log})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         db.close()
 
+
+@app.route('/api/project/<project_name>/generate_s6', methods=['POST'])
+def generate_section6(project_name):
+    """
+    Section 6: Technology Deep Dives — Chunked per-framework generation.
+    
+    Called in two modes:
+    1. phase=discovery (or no phase): Run Phase 0 to discover frameworks. Returns framework list.
+    2. phase=deep_dive, framework_index=N: Generate deep dive for framework N. Merges into section 6.
+    """
+    db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
+    if not os.path.exists(db_path):
+        return jsonify({'error': 'Project not found'}), 404
+
+    data = request.json
+    provider = data.get('provider')
+    api_key = data.get('api_key')
+    phase = data.get('phase', 'discovery')
+    framework_index = data.get('framework_index')
+    detail_level = data.get('detail_level', 2)  # Default to Detailed for section 6
+    custom_instructions = data.get('custom_instructions', '')
+
+    if not provider or not api_key:
+        return jsonify({'error': 'Provider and API key are required'}), 400
+
+    # Resolve saved key references
+    if str(api_key).startswith('saved_'):
+        try:
+            key_index = int(api_key.replace('saved_', ''))
+            cfg = load_config()
+            keys = cfg.get('llm_keys', [])
+            if 0 <= key_index < len(keys):
+                api_key = decrypt_val(keys[key_index].get('key'))
+                provider = keys[key_index].get('provider')
+            else:
+                return jsonify({'error': 'Invalid saved key reference'}), 400
+        except ValueError:
+            return jsonify({'error': 'Invalid saved key format'}), 400
+
+    db = ProjectDB(db_path)
+    try:
+        info = db.get_repo_info()
+        files = db.get_files()
+
+        # Load existing section 6 content for resume support
+        existing_section = db.get_generated_section(6)
+        existing_content = {}
+        if existing_section and existing_section.get('content'):
+            try:
+                existing_content = json.loads(existing_section['content']) if isinstance(existing_section['content'], str) else existing_section['content']
+            except (json.JSONDecodeError, TypeError):
+                existing_content = {}
+
+        # ===== PHASE 0: Framework Discovery =====
+        if phase == 'discovery':
+            # Build context: project info + all imports + file skeleton
+            context_str = f"Project Name: {info.get('full_name')}\n"
+            context_str += f"Description: {info.get('description')}\n"
+            context_str += f"Language: {info.get('language')}\n\n"
+
+            # Collect all imports
+            all_imports = set()
+            file_imports_map = {}
+            for f in files:
+                if f.get('metadata'):
+                    try:
+                        meta = json.loads(f['metadata']) if isinstance(f['metadata'], str) else f['metadata']
+                        file_imps = []
+                        for key in ('imports', 'includes', 'uses'):
+                            vals = meta.get(key, [])
+                            if isinstance(vals, list):
+                                all_imports.update(vals)
+                                file_imps.extend(vals)
+                        if file_imps:
+                            file_imports_map[f['path']] = file_imps
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+            context_str += "All imports found in the project:\n"
+            for imp in sorted(all_imports):
+                context_str += f"- {imp}\n"
+
+            context_str += "\nFile structure with their imports:\n"
+            for f in files:
+                imps = file_imports_map.get(f['path'], [])
+                imp_str = f" [imports: {', '.join(imps[:10])}]" if imps else ""
+                context_str += f"- {f['path']} ({f.get('language', 'unknown')}, {f['size']}B){imp_str}\n"
+
+            # Check if Section 2 (Tech Stack) exists for richer context
+            section2 = db.get_generated_section(2)
+            if section2 and section2.get('content'):
+                try:
+                    s2_content = json.loads(section2['content']) if isinstance(section2['content'], str) else section2['content']
+                    context_str += "\n\nExisting Tech Stack Analysis:\n"
+                    context_str += json.dumps(s2_content, indent=2)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            discovery_result = generate_content(
+                provider=provider,
+                api_key=api_key,
+                system_prompt=FRAMEWORK_DISCOVERY_PROMPT,
+                user_prompt=f"Analyze this project and identify the frameworks for deep dives:\n\n{context_str}",
+                response_schema=FrameworkDiscovery
+            )
+
+            discovery_data = discovery_result.model_dump() if hasattr(discovery_result, 'model_dump') else discovery_result
+
+            # Save discovery to section 6 content
+            existing_content['discovery'] = discovery_data
+            if 'deep_dives' not in existing_content:
+                existing_content['deep_dives'] = []
+
+            db.save_generated_section(6, 'Technology Deep Dives', existing_content)
+
+            # Determine which frameworks are already completed
+            completed_names = [d.get('framework_name', '') for d in existing_content.get('deep_dives', [])]
+            frameworks = discovery_data.get('frameworks', [])
+
+            return jsonify({
+                'message': 'Discovery complete',
+                'phase': 'discovery',
+                'frameworks': frameworks,
+                'total': len(frameworks),
+                'completed': completed_names,
+                'remaining': [fw for fw in frameworks if fw['name'] not in completed_names]
+            })
+
+        # ===== PHASE 1: Per-Framework Deep Dive =====
+        elif phase == 'deep_dive':
+            if framework_index is None:
+                return jsonify({'error': 'framework_index is required for deep_dive phase'}), 400
+
+            framework_index = int(framework_index)
+
+            # Load discovery data
+            discovery = existing_content.get('discovery', {})
+            frameworks = discovery.get('frameworks', [])
+            if framework_index < 0 or framework_index >= len(frameworks):
+                return jsonify({'error': f'Invalid framework_index: {framework_index}'}), 400
+
+            fw = frameworks[framework_index]
+            fw_name = fw['name']
+
+            # Check if already completed (resume support)
+            existing_dives = existing_content.get('deep_dives', [])
+            if any(d.get('framework_name') == fw_name for d in existing_dives):
+                return jsonify({
+                    'message': f'{fw_name} already completed',
+                    'phase': 'deep_dive',
+                    'framework_name': fw_name,
+                    'framework_index': framework_index,
+                    'skipped': True
+                })
+
+            # Build focused context: only files relevant to this framework
+            context_str = f"Project Name: {info.get('full_name')}\n"
+            context_str += f"Description: {info.get('description')}\n"
+            context_str += f"Language: {info.get('language')}\n\n"
+            context_str += f"Framework to analyze: {fw_name} ({fw.get('category', '')})\n"
+            context_str += f"Relevant files: {', '.join(fw.get('relevant_files', []))}\n\n"
+
+            # Fetch actual code for relevant files
+            file_lookup = {f['path']: f for f in files}
+            context_str += "--- SOURCE CODE OF RELEVANT FILES ---\n"
+            for path in fw.get('relevant_files', []):
+                file_record = file_lookup.get(path)
+                if not file_record:
+                    continue
+                blocks = db.get_code_blocks(file_record['id'])
+                file_content = "".join([b['content'] for b in blocks if b['content']])
+                if file_content:
+                    context_str += f"\nFile: {path}\n{file_content}\n"
+            context_str += "--- END SOURCE CODE ---\n"
+
+            # Determine interview topic count based on detail level
+            topic_counts = {0: 5, 1: 10, 2: 15}
+            topic_count = topic_counts.get(detail_level, 10)
+
+            # Build the system prompt with detail level and topic count
+            system_prompt = FRAMEWORK_DEEP_DIVE_PROMPT
+            system_prompt += f"\n\nFor the Interview Must-Know Topics section, provide exactly {topic_count} topics."
+            system_prompt += f"\nDistribute them across difficulty levels: roughly 30% Basic, 40% Intermediate, 30% Advanced."
+
+            detail_instructions = {
+                0: "\n\nDETAIL LEVEL: SHORT. Keep explanations brief. 1-2 sentences per answer.",
+                1: "\n\nDETAIL LEVEL: MEDIUM. Balanced depth. 2-3 sentences per answer.",
+                2: "\n\nDETAIL LEVEL: DETAILED. Comprehensive answers. 4-6 sentences per answer. Include edge cases and nuances."
+            }
+            system_prompt += detail_instructions.get(detail_level, detail_instructions[2])
+
+            if custom_instructions:
+                system_prompt += f"\n\nUser Custom Instructions:\n{custom_instructions}"
+
+            user_prompt = f"Generate a comprehensive deep dive for {fw_name}:\n\n{context_str}"
+
+            result = generate_content(
+                provider=provider,
+                api_key=api_key,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                response_schema=FrameworkDeepDive
+            )
+
+            dive_data = result.model_dump() if hasattr(result, 'model_dump') else result
+
+            # Merge into section 6 content
+            existing_dives.append(dive_data)
+            existing_content['deep_dives'] = existing_dives
+            db.save_generated_section(6, 'Technology Deep Dives', existing_content)
+
+            # Calculate overall progress
+            total_frameworks = len(frameworks)
+            completed_count = len(existing_dives)
+
+            return jsonify({
+                'message': f'{fw_name} deep dive complete',
+                'phase': 'deep_dive',
+                'framework_name': fw_name,
+                'framework_index': framework_index,
+                'content': dive_data,
+                'progress': {
+                    'completed': completed_count,
+                    'total': total_frameworks
+                }
+            })
+
+        else:
+            return jsonify({'error': f'Unknown phase: {phase}'}), 400
+
+    except Exception as e:
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+    finally:
+        db.close()
 
 @app.route('/api/project/<project_name>/generated', methods=['GET'])
 def get_generated_sections(project_name):
@@ -346,6 +740,412 @@ def get_generated_sections(project_name):
         return jsonify(sections)
     finally:
         db.close()
+
+
+def get_mermaid_ink_url(mermaid_text):
+    # mermaid.ink accepts base64 url-safe encoded string (no zlib compression needed for simple base64 route)
+    # It renders to a raster image (JPEG/PNG) which WeasyPrint can display perfectly (unlike Mermaid's SVGs with <foreignObject>)
+    
+    # Base64 encode the string
+    mermaid_text = mermaid_text.strip()
+    encoded = base64.urlsafe_b64encode(mermaid_text.encode('utf-8')).decode('ascii')
+    
+    return f"https://mermaid.ink/img/{encoded}"
+
+@app.route('/api/project/<project_name>/pdf', methods=['GET', 'POST'])
+def generate_pdf(project_name):
+    try:
+        from weasyprint import HTML
+        import markdown2
+    except ImportError as e:
+        return jsonify({'error': f'PDF dependencies not installed: {str(e)}'}), 500
+        
+    db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
+    if not os.path.exists(db_path):
+        return jsonify({'error': 'Project not found'}), 404
+
+    # Parse skip/placeholder config from request body (POST) or default to empty
+    skip_sections = []
+    placeholder_sections = []
+    if request.method == 'POST' and request.json:
+        skip_sections = request.json.get('skip_sections', [])
+        placeholder_sections = request.json.get('placeholder_sections', [])
+
+    db = ProjectDB(db_path)
+    try:
+        sections = db.get_generated_sections()
+        info = db.get_repo_info()
+        
+        project_title = str(info.get('name', project_name))
+        
+        html_content = f"""
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                @page {{ size: A4; margin: 20mm; }}
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1f2937; line-height: 1.6; font-size: 11pt; }}
+                h1 {{ color: #111827; font-size: 28pt; border-bottom: 2px solid #f97316; padding-bottom: 8px; margin-top: 0; }}
+                h2 {{ color: #ea580c; font-size: 24pt; margin-top: 35px; page-break-before: always; border-bottom: 2px solid #ea580c; padding-bottom: 5px; }}
+                h3 {{ color: #374151; font-size: 16pt; margin-top: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }}
+                h4 {{ color: #4b5563; font-size: 14pt; margin-top: 15px; border-bottom: 1px solid #f3f4f6; padding-bottom: 4px; }}
+                h5 {{ color: #111827; font-size: 12pt; margin-top: 0; margin-bottom: 8px; }}
+                .title-page {{ height: 90vh; display: flex; flex-direction: column; justify-content: center; text-align: center; page-break-after: always; }}
+                .title-page h1 {{ border: none; font-size: 36pt; margin-bottom: 10px; color: #111827; }}
+                .title-page p {{ font-size: 16pt; color: #6b7280; }}
+                pre {{ background: #f3f4f6; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5pt; border: 1px solid #e5e7eb; }}
+                code {{ background: #f3f4f6; padding: 2px 4px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5pt; }}
+                ul {{ margin-top: 8px; margin-bottom: 16px; padding-left: 20px; }}
+                li {{ margin-bottom: 6px; }}
+                .item-card {{ background: #ffffff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: table; width: 100%; box-sizing: border-box; }}
+                .item-row {{ display: table-row; }}
+                .item-key {{ font-weight: 600; color: #4b5563; display: table-cell; width: 25%; padding-right: 15px; padding-bottom: 10px; vertical-align: top; word-break: break-word; font-size: 11pt; }}
+                .item-val {{ display: table-cell; width: 75%; padding-bottom: 10px; vertical-align: top; font-size: 11pt; }}
+                p {{ margin-top: 0; margin-bottom: 12px; }}
+                .placeholder-note {{ color: #9ca3af; font-style: italic; padding: 20px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class="title-page">
+                <h1>Interview Prep: {project_title}</h1>
+                <p>Generated by BuiltByMe</p>
+            </div>
+        """
+        
+        for s in sections:
+            sid = s['section_id']
+            
+            # Skip sections marked as skip — exclude entirely
+            if sid in skip_sections:
+                continue
+            
+            html_content += f"<h2>Section {sid}: {str(s['name'])}</h2>\n"
+            
+            # Placeholder sections — heading only, blank content
+            if sid in placeholder_sections:
+                html_content += "<p class='placeholder-note'>(This section is intentionally left blank for manual completion.)</p>\n"
+                continue
+            
+            content_dict = None
+            try:
+                content_dict = json.loads(s['content'])
+            except:
+                pass
+                
+            if isinstance(content_dict, dict):
+                if sid == 3:
+                    # === Section 3: Architecture & Module Map ===
+                    # Folder Tree
+                    folder_tree = content_dict.get('folder_tree', '')
+                    if folder_tree:
+                        html_content += "<h3>Folder Structure</h3>\n"
+                        html_content += f"<pre style='background:#f8f9fa; padding:16px; border-radius:8px; font-size:10pt; line-height:1.6; border:1px solid #e5e7eb;'>{str(folder_tree)}</pre>\n"
+                    
+                    # Architecture Diagram (Mermaid)
+                    diagram = content_dict.get('architecture_diagram', '')
+                    if diagram:
+                        html_content += "<h3>Architecture Diagram</h3>\n"
+                        try:
+                            kroki_url = get_mermaid_ink_url(diagram)
+                            html_content += f"<div style='text-align: center; margin: 20px 0;'><img src='{kroki_url}' style='max-width: 100%; max-height: 500px;' /></div>\n"
+                        except Exception as e:
+                            html_content += f"<p style='color: red;'>Failed to render diagram: {str(e)}</p>"
+                            html_content += f"<pre style='background:#1e1e2e; color:#cdd6f4; padding:20px; border-radius:8px; font-size:10pt; line-height:1.6; border:2px solid #f97316;'>{str(diagram)}</pre>\n"
+                    
+                    # Architecture Style
+                    style = content_dict.get('architecture_style', '')
+                    if style:
+                        html_content += "<h3>Architecture Style</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(style)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    # Layer Breakdown
+                    layers = content_dict.get('layer_breakdown', '')
+                    if layers:
+                        html_content += "<h3>Layer Breakdown</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(layers)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    # Modules
+                    modules = content_dict.get('modules', [])
+                    if modules:
+                        html_content += "<h3>Modules</h3>\n"
+                        for mod in modules:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Module</div><div class='item-val'><strong>{str(mod.get('folder_or_file', ''))}</strong></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Purpose</div><div class='item-val'>{str(mod.get('purpose', ''))}</div></div>"
+                            key_files = mod.get('key_files', [])
+                            if key_files:
+                                html_content += f"<div class='item-row'><div class='item-key'>Key Files</div><div class='item-val'>{'<br>'.join(str(f) for f in key_files)}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Entry Points
+                    entries = content_dict.get('entry_points', [])
+                    if entries:
+                        html_content += "<h3>Entry Points</h3>\n<ul>\n"
+                        for ep in entries:
+                            html_content += f"<li>{str(ep)}</li>\n"
+                        html_content += "</ul>\n"
+                    
+                    # Data Flow (text steps)
+                    flow = content_dict.get('data_flow', [])
+                    if flow:
+                        html_content += "<h3>Data Flow</h3>\n"
+                        for step in flow:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Step {step.get('step_number', '')}</div><div class='item-val'>{str(step.get('description', ''))}</div></div>"
+                            mods = step.get('modules_involved', [])
+                            if mods:
+                                html_content += f"<div class='item-row'><div class='item-key'>Modules</div><div class='item-val'>{', '.join(str(m) for m in mods)}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Data Flow Diagram (Mermaid)
+                    flow_diagram = content_dict.get('data_flow_diagram', '')
+                    if flow_diagram:
+                        html_content += "<h3>Data Flow Diagram</h3>\n"
+                        try:
+                            kroki_url = get_mermaid_ink_url(flow_diagram)
+                            html_content += f"<div style='text-align: center; margin: 20px 0;'><img src='{kroki_url}' style='max-width: 100%; max-height: 500px;' /></div>\n"
+                        except Exception as e:
+                            html_content += f"<p style='color: red;'>Failed to render diagram: {str(e)}</p>"
+                            html_content += f"<pre style='background:#1e1e2e; color:#cdd6f4; padding:20px; border-radius:8px; font-size:10pt; line-height:1.6; border:2px solid #f97316;'>{str(flow_diagram)}</pre>\n"
+
+                
+                elif sid == 4:
+                    # === Section 4: Environment & Secrets ===
+                    # Environment Variables
+                    env_vars = content_dict.get('env_variables', [])
+                    if env_vars:
+                        html_content += "<h3>Environment Variables</h3>\n"
+                        for ev in env_vars:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Variable</div><div class='item-val'><code>{str(ev.get('name', ''))}</code></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Purpose</div><div class='item-val'>{str(ev.get('purpose', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Required</div><div class='item-val'>{'Yes' if ev.get('required') else 'No'}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Example</div><div class='item-val'><code>{str(ev.get('example_value', ''))}</code></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Used In</div><div class='item-val'>{str(ev.get('where_used', ''))}</div></div>"
+                            html_content += "</div>\n"
+                    else:
+                        html_content += "<h3>Environment Variables</h3>\n<p>No environment variables detected in this project.</p>\n"
+                    
+                    # Config Files
+                    configs = content_dict.get('config_files', [])
+                    if configs:
+                        html_content += "<h3>Configuration Files</h3>\n"
+                        for cf in configs:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>File</div><div class='item-val'><code>{str(cf.get('file_path', ''))}</code></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Purpose</div><div class='item-val'>{str(cf.get('purpose', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Format</div><div class='item-val'>{str(cf.get('format', ''))}</div></div>"
+                            settings = cf.get('key_settings', [])
+                            if settings:
+                                html_content += f"<div class='item-row'><div class='item-key'>Key Settings</div><div class='item-val'>{'<br>'.join(str(s) for s in settings)}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Secrets
+                    secrets = content_dict.get('secrets', [])
+                    if secrets:
+                        html_content += "<h3>Secrets Management</h3>\n"
+                        for sec_item in secrets:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Secret</div><div class='item-val'><strong>{str(sec_item.get('name', ''))}</strong></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Storage</div><div class='item-val'>{str(sec_item.get('how_stored', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Access</div><div class='item-val'>{str(sec_item.get('how_accessed', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Rotation</div><div class='item-val'>{str(sec_item.get('rotation_strategy', ''))}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Dev vs Prod
+                    dvp = content_dict.get('dev_vs_prod', '')
+                    if dvp:
+                        html_content += "<h3>Development vs Production</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(dvp)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    # Setup Steps
+                    steps = content_dict.get('setup_steps', [])
+                    if steps:
+                        html_content += "<h3>Setup Instructions</h3>\n<ol>\n"
+                        for step in steps:
+                            html_content += f"<li>{str(step)}</li>\n"
+                        html_content += "</ol>\n"
+                    
+                    # Security
+                    security = content_dict.get('security_considerations', '')
+                    if security:
+                        html_content += "<h3>Security Considerations</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(security)).replace('<p>','').replace('</p>','')}</p>\n"
+                
+                elif sid == 5:
+                    # === Section 5: Core Functions & Classes ===
+                    summary = content_dict.get('summary', '')
+                    if summary:
+                        html_content += "<h3>Summary</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(summary)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    interaction_map = content_dict.get('interaction_map', '')
+                    if interaction_map:
+                        html_content += "<h3>Interaction Map</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(interaction_map)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    core_items = content_dict.get('core_items', [])
+                    if core_items:
+                        html_content += "<h3>Core Functions & Classes</h3>\n"
+                        for item in core_items:
+                            html_content += "<div class='item-card'>"
+                            kind_badge = item.get('kind', 'function').upper()
+                            html_content += f"<div class='item-row'><div class='item-key'>Name</div><div class='item-val'><strong>{str(item.get('name', ''))}</strong> <span style='background:#f97316;color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;'>{kind_badge}</span></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>File</div><div class='item-val'><code>{str(item.get('file_location', ''))}</code> ({str(item.get('line_range', ''))})</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Purpose</div><div class='item-val'>{str(item.get('purpose', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Inputs</div><div class='item-val'>{str(item.get('inputs', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Outputs</div><div class='item-val'>{str(item.get('outputs', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Why Important</div><div class='item-val'>{str(item.get('why_important', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Called By</div><div class='item-val'>{str(item.get('called_by', ''))}</div></div>"
+                            complexity = item.get('complexity_note', '')
+                            if complexity:
+                                html_content += f"<div class='item-row'><div class='item-key'>Complexity</div><div class='item-val'><em>{str(complexity)}</em></div></div>"
+                            html_content += "</div>\n"
+
+                elif sid == 6 and 'deep_dives' in content_dict:
+                    dives = content_dict.get('deep_dives', [])
+                    if not dives:
+                        html_content += "<p>No deep dives generated yet.</p>\n"
+                    for dive in dives:
+                        fw_name = dive.get('framework_name', 'Unknown Framework')
+                        html_content += f"<h3>Framework: {fw_name}</h3>\n"
+                        category = dive.get('category', '')
+                        if category:
+                            html_content += f"<p><strong>Category:</strong> {category}</p>\n"
+                        
+                        for section_key in ['basics', 'directly_used_concepts', 'indirect_concepts']:
+                            concepts = dive.get(section_key, [])
+                            if concepts:
+                                section_title = section_key.replace('_', ' ').title()
+                                html_content += f"<h4>{section_title}</h4>\n"
+                                for concept in concepts:
+                                    html_content += "<div class='item-card'>"
+                                    c_title = concept.get('title', '')
+                                    c_exp = concept.get('explanation', '')
+                                    c_code = concept.get('code_snippet', '')
+                                    html_content += f"<h5>{c_title}</h5>\n"
+                                    if c_exp:
+                                        html_content += f"<p>{markdown2.markdown(str(c_exp)).replace('<p>','').replace('</p>','')}</p>\n"
+                                    if c_code:
+                                        html_content += f"<pre><code>{str(c_code)}</code></pre>\n"
+                                    html_content += "</div>\n"
+
+                elif sid == 7:
+                    # === Section 7: Design Decisions ===
+                    arch_pattern = content_dict.get('architectural_pattern', '')
+                    if arch_pattern:
+                        html_content += "<h3>Architectural Pattern</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(arch_pattern)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    principles = content_dict.get('design_principles', [])
+                    if principles:
+                        html_content += "<h3>Guiding Principles</h3>\n<ul>\n"
+                        for p in principles:
+                            html_content += f"<li>{str(p)}</li>\n"
+                        html_content += "</ul>\n"
+                    
+                    decisions = content_dict.get('decisions', [])
+                    if decisions:
+                        html_content += "<h3>Key Decisions</h3>\n"
+                        for dec in decisions:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Decision</div><div class='item-val'><strong>{str(dec.get('title', ''))}</strong></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Context</div><div class='item-val'>{str(dec.get('context', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Decision</div><div class='item-val'>{str(dec.get('decision', ''))}</div></div>"
+                            alts = dec.get('alternatives_considered', [])
+                            if alts:
+                                html_content += f"<div class='item-row'><div class='item-key'>Alternatives</div><div class='item-val'>{', '.join(str(a) for a in alts)}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Trade-offs</div><div class='item-val'>{str(dec.get('trade_offs', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Outcome</div><div class='item-val'>{str(dec.get('outcome', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Interview Angle</div><div class='item-val'><em>{str(dec.get('interview_angle', ''))}</em></div></div>"
+                            html_content += "</div>\n"
+
+                elif sid == 8:
+                    # === Section 8: Failure Log & Learnings ===
+                    biggest = content_dict.get('biggest_lesson', '')
+                    if biggest:
+                        html_content += "<h3>Biggest Lesson</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(biggest)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    diff = content_dict.get('what_id_do_differently', '')
+                    if diff:
+                        html_content += "<h3>What I'd Do Differently</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(diff)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    growth = content_dict.get('growth_areas', [])
+                    if growth:
+                        html_content += "<h3>Growth Areas</h3>\n<ul>\n"
+                        for g in growth:
+                            html_content += f"<li>{str(g)}</li>\n"
+                        html_content += "</ul>\n"
+                    
+                    failures = content_dict.get('failures', [])
+                    if failures:
+                        html_content += "<h3>Failure Log</h3>\n"
+                        for fail in failures:
+                            category_badge = str(fail.get('category', '')).upper()
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Problem</div><div class='item-val'><strong>{str(fail.get('title', ''))}</strong> <span style='background:#ef4444;color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;'>{category_badge}</span></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>What Happened</div><div class='item-val'>{str(fail.get('what_happened', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Initial Approach</div><div class='item-val'>{str(fail.get('initial_approach', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Root Cause</div><div class='item-val'>{str(fail.get('root_cause', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Solution</div><div class='item-val'>{str(fail.get('solution', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Lesson Learned</div><div class='item-val'><em>{str(fail.get('lesson_learned', ''))}</em></div></div>"
+                            html_content += "</div>\n"
+                else:
+                    for key, val in content_dict.items():
+                        title = ' '.join(word.capitalize() for word in key.split('_'))
+                        html_content += f"<h3>{title}</h3>\n"
+                        
+                        if isinstance(val, list):
+                            for item in val:
+                                if isinstance(item, dict):
+                                    html_content += "<div class='item-card'>"
+                                    for k, v in item.items():
+                                        formatted_key = k.replace('_', ' ').title()
+                                        if isinstance(v, list):
+                                            html_content += f"<div class='item-row'><div class='item-key'>{formatted_key}</div><div class='item-val'>{', '.join(str(x) for x in v)}</div></div>"
+                                        else:
+                                            html_content += f"<div class='item-row'><div class='item-key'>{formatted_key}</div><div class='item-val'>{markdown2.markdown(str(v)).replace('<p>','').replace('</p>','')}</div></div>"
+                                    html_content += "</div>"
+                                else:
+                                    html_content += f"<ul><li>{markdown2.markdown(str(item)).replace('<p>','').replace('</p>','')}</li></ul>"
+                        elif isinstance(val, dict):
+                            html_content += "<div class='item-card'>"
+                            for k, v in val.items():
+                                formatted_key = k.replace('_', ' ').title()
+                                html_content += f"<div class='item-row'><div class='item-key'>{formatted_key}</div><div class='item-val'>{markdown2.markdown(str(v)).replace('<p>','').replace('</p>','')}</div></div>"
+                            html_content += "</div>"
+                        else:
+                            html_content += markdown2.markdown(str(val))
+            else:
+                html_content += markdown2.markdown(str(s['content']))
+            
+        html_content += "</body></html>"
+        
+        # Generate PDF
+        pdf_bytes = HTML(string=html_content).write_pdf()
+        
+        # Save a copy to the project folder
+        pdf_path = os.path.join(PROJECTS_DIR, project_name, f"{project_name}_revision.pdf")
+        with open(pdf_path, 'wb') as f:
+            f.write(pdf_bytes)
+            
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=f"{project_name}_revision.pdf",
+            mimetype='application/pdf'
+        )
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+    finally:
+        db.close()
+
 
 
 @app.route('/api/project/<project_name>/generated/<int:section_id>', methods=['DELETE'])
