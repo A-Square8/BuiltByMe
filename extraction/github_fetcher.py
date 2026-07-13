@@ -3,11 +3,14 @@ import base64
 from .file_filter import should_skip_dir, should_skip_file
 
 
+import fnmatch
+
 class GitHubFetcher:
 
-    def __init__(self, repo_url, token=None):
+    def __init__(self, repo_url, token=None, ignore_patterns=None):
         self.repo_url = repo_url.rstrip('/')
         self.token = token
+        self.ignore_patterns = ignore_patterns or []
         self.owner, self.repo = self._parse_url()
         self.api_base = f"https://api.github.com/repos/{self.owner}/{self.repo}"
         self.headers = {'Accept': 'application/vnd.github.v3+json'}
@@ -71,6 +74,17 @@ class GitHubFetcher:
             path = item['path']
             parts = path.split('/')
             skip = False
+            
+            # Check custom ignore patterns (using fnmatch for wildcard support)
+            for pattern in self.ignore_patterns:
+                if fnmatch.fnmatch(path, pattern) or any(fnmatch.fnmatch(p, pattern) for p in parts):
+                    skip = True
+                    break
+            
+            if skip:
+                continue
+
+            # Standard filtering
             for part in parts[:-1]:
                 if should_skip_dir(part):
                     skip = True

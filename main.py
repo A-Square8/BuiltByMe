@@ -18,7 +18,9 @@ from extraction.prompts import (
     FrameworkDiscovery, FRAMEWORK_DISCOVERY_PROMPT,
     FrameworkDeepDive, FRAMEWORK_DEEP_DIVE_PROMPT,
     Section3Architecture, Section4Environment,
-    Section5CoreFunctions, Section7DesignDecisions, Section8FailureLog
+    Section5CoreFunctions, Section7DesignDecisions, Section8FailureLog,
+    Section9APIs, Section10DataModels, Section11Testing, Section12Scalability,
+    Section13Deployment, Section14InterviewBank
 )
 
 app = Flask(__name__, static_folder='ui', static_url_path='')
@@ -177,6 +179,9 @@ def start_extraction():
         cfg = load_config()
         token = decrypt_val(cfg.get('github_pat', '')) or None
 
+    ignore_patterns_str = data.get('ignore_patterns', '').strip()
+    ignore_patterns = [p.strip() for p in ignore_patterns_str.split(',')] if ignore_patterns_str else []
+
     if not repo_url:
         return jsonify({'error': 'Repository URL is required'}), 400
 
@@ -192,7 +197,7 @@ def start_extraction():
     extraction_status[repo_name] = {'status': 'starting', 'total': 0, 'processed': 0, 'current_file': '', 'errors': []}
 
     def run_pipeline():
-        pipeline = ExtractionPipeline(repo_url, token, PROJECTS_DIR)
+        pipeline = ExtractionPipeline(repo_url, token, PROJECTS_DIR, ignore_patterns=ignore_patterns)
 
         def on_progress(prog):
             extraction_status[repo_name] = dict(prog)
@@ -477,7 +482,10 @@ def generate_section(project_name):
         section_names = {
             1: 'Project Overview', 2: 'Tech Stack', 3: 'Architecture & Module Map',
             4: 'Environment & Secrets', 5: 'Core Functions & Classes',
-            7: 'Design Decisions', 8: 'Failure Log & Learnings'
+            7: 'Design Decisions', 8: 'Failure Log & Learnings',
+            9: 'APIs & Interfaces', 10: 'Data Models & Storage',
+            11: 'Testing Strategy', 12: 'Scalability & Production',
+            13: 'Deployment & Infra', 14: 'Interview Question Bank'
         }
         
         db.save_generated_section(section_id, section_names.get(section_id, f'Section {section_id}'), content)
@@ -793,11 +801,11 @@ def generate_pdf(project_name):
                 .title-page {{ height: 90vh; display: flex; flex-direction: column; justify-content: center; text-align: center; page-break-after: always; }}
                 .title-page h1 {{ border: none; font-size: 36pt; margin-bottom: 10px; color: #111827; }}
                 .title-page p {{ font-size: 16pt; color: #6b7280; }}
-                pre {{ background: #f3f4f6; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5pt; border: 1px solid #e5e7eb; }}
-                code {{ background: #f3f4f6; padding: 2px 4px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5pt; }}
+                pre {{ background: #f3f4f6; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5pt; border: 1px solid #e5e7eb; white-space: pre-wrap; word-break: break-word; }}
+                code {{ background: #f3f4f6; padding: 2px 4px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5pt; white-space: pre-wrap; word-break: break-word; }}
                 ul {{ margin-top: 8px; margin-bottom: 16px; padding-left: 20px; }}
                 li {{ margin-bottom: 6px; }}
-                .item-card {{ background: #ffffff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: table; width: 100%; box-sizing: border-box; }}
+                .item-card {{ background: #ffffff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: table; width: 100%; box-sizing: border-box; page-break-inside: avoid; }}
                 .item-row {{ display: table-row; }}
                 .item-key {{ font-weight: 600; color: #4b5563; display: table-cell; width: 25%; padding-right: 15px; padding-bottom: 10px; vertical-align: top; word-break: break-word; font-size: 11pt; }}
                 .item-val {{ display: table-cell; width: 75%; padding-bottom: 10px; vertical-align: top; font-size: 11pt; }}
@@ -1092,8 +1100,408 @@ def generate_pdf(project_name):
                             html_content += f"<div class='item-row'><div class='item-key'>Solution</div><div class='item-val'>{str(fail.get('solution', ''))}</div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>Lesson Learned</div><div class='item-val'><em>{str(fail.get('lesson_learned', ''))}</em></div></div>"
                             html_content += "</div>\n"
+
+                elif sid == 9:
+                    # === Section 9: APIs & Interfaces ===
+                    overview = content_dict.get('api_overview', '')
+                    if overview:
+                        html_content += "<h3>API Overview</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(overview)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    # Endpoints
+                    endpoints = content_dict.get('endpoints', [])
+                    if endpoints:
+                        html_content += "<h3>API Endpoints</h3>\n"
+                        for ep in endpoints:
+                            method = str(ep.get('method', 'GET')).upper()
+                            method_colors = {'GET': '#3b82f6', 'POST': '#10b981', 'PUT': '#f59e0b', 'DELETE': '#ef4444', 'PATCH': '#8b5cf6'}
+                            m_color = method_colors.get(method, '#6b7280')
+                            
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Endpoint</div><div class='item-val'><span style='background:{m_color};color:#fff;padding:2px 6px;border-radius:3px;font-weight:bold;font-size:9pt;margin-right:8px;'>{method}</span> <code>{str(ep.get('path', ''))}</code></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Purpose</div><div class='item-val'>{str(ep.get('purpose', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Request Body</div><div class='item-val'><code>{str(ep.get('request_body', ''))}</code></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Response</div><div class='item-val'><code>{str(ep.get('response_format', ''))}</code></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Auth / Errors</div><div class='item-val'><strong>Auth:</strong> {str(ep.get('auth_required', ''))}<br><strong>Errors:</strong> {str(ep.get('error_handling', ''))}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Design Patterns
+                    patterns = content_dict.get('design_patterns', [])
+                    if patterns:
+                        html_content += "<h3>API Design Patterns</h3>\n"
+                        for p in patterns:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Pattern</div><div class='item-val'><strong>{str(p.get('pattern', ''))}</strong></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Description</div><div class='item-val'>{str(p.get('description', ''))}</div></div>"
+                            examples = p.get('examples', [])
+                            if examples:
+                                html_content += f"<div class='item-row'><div class='item-key'>Examples</div><div class='item-val'>{'<br>'.join('• ' + str(ex) for ex in examples)}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Strategies
+                    strategies = [
+                        ('Error Strategy', content_dict.get('error_strategy', '')),
+                        ('Rate Limiting', content_dict.get('rate_limiting', '')),
+                        ('Versioning', content_dict.get('versioning', ''))
+                    ]
+                    for title, content in strategies:
+                        if content:
+                            html_content += f"<h3>{title}</h3>\n"
+                            html_content += f"<p>{markdown2.markdown(str(content)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    tips = content_dict.get('interview_tips', '')
+                    if tips:
+                        html_content += "<h3>Interview Tips</h3>\n"
+                        html_content += f"<div class='item-card' style='background:#f0fdf4;border-left:4px solid #22c55e;'><p><em>{markdown2.markdown(str(tips)).replace('<p>','').replace('</p>','')}</em></p></div>\n"
+
+                elif sid == 10:
+                    # === Section 10: Data Models & Storage ===
+                    overview = content_dict.get('data_overview', '')
+                    if overview:
+                        html_content += "<h3>Data & Storage Overview</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(overview)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    # ER Diagram
+                    diagram = content_dict.get('schema_diagram', '')
+                    if diagram:
+                        html_content += "<h3>Schema Diagram</h3>\n"
+                        try:
+                            kroki_url = get_mermaid_ink_url(diagram)
+                            html_content += f"<div style='text-align: center; margin: 20px 0;'><img src='{kroki_url}' style='max-width: 100%; max-height: 500px;' /></div>\n"
+                        except Exception as e:
+                            html_content += f"<p style='color: red;'>Failed to render diagram: {str(e)}</p>"
+                            html_content += f"<pre style='background:#1e1e2e; color:#cdd6f4; padding:20px; border-radius:8px; font-size:10pt; line-height:1.6; border:2px solid #f97316;'>{str(diagram)}</pre>\n"
+                    
+                    # Models
+                    models = content_dict.get('models', [])
+                    if models:
+                        html_content += "<h3>Data Models</h3>\n"
+                        for m in models:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Model</div><div class='item-val'><strong>{str(m.get('name', ''))}</strong> <span style='background:#475569;color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;'>{str(m.get('storage_type', ''))}</span></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Purpose</div><div class='item-val'>{str(m.get('purpose', ''))}</div></div>"
+                            fields = m.get('fields', [])
+                            if fields:
+                                html_content += f"<div class='item-row'><div class='item-key'>Fields</div><div class='item-val'>{'<br>'.join('• <code>' + str(f).split(' — ')[0] + '</code>' + (' — ' + str(f).split(' — ')[1] if ' — ' in str(f) else '') for f in fields)}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Relationships</div><div class='item-val'>{str(m.get('relationships', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Access Patterns</div><div class='item-val'>{str(m.get('access_patterns', ''))}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Storage Decisions
+                    decisions = content_dict.get('storage_decisions', [])
+                    if decisions:
+                        html_content += "<h3>Key Storage Decisions</h3>\n"
+                        for d in decisions:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Decision</div><div class='item-val'><strong>{str(d.get('decision', ''))}</strong></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Reasoning</div><div class='item-val'>{str(d.get('reasoning', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Trade-offs</div><div class='item-val'>{str(d.get('trade_offs', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Production Alt.</div><div class='item-val' style='color:#0284c7;'>{str(d.get('production_alternative', ''))}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    strategies = [
+                        ('Indexing Strategy', content_dict.get('indexing_strategy', '')),
+                        ('Data Lifecycle', content_dict.get('data_lifecycle', '')),
+                        ('Migration Strategy', content_dict.get('migration_strategy', ''))
+                    ]
+                    for title, content in strategies:
+                        if content:
+                            html_content += f"<h3>{title}</h3>\n"
+                            html_content += f"<p>{markdown2.markdown(str(content)).replace('<p>','').replace('</p>','')}</p>\n"
+
+                elif sid == 11:
+                    # === Section 11: Testing Strategy ===
+                    overview = content_dict.get('testing_overview', '')
+                    if overview:
+                        html_content += "<h3>Testing Overview</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(overview)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    current = content_dict.get('current_tests', [])
+                    if current:
+                        html_content += "<h3>Current Test Coverage</h3>\n<ul>\n"
+                        for c in current:
+                            html_content += f"<li>{str(c)}</li>\n"
+                        html_content += "</ul>\n"
+                    
+                    # Proposed Test Plan
+                    plan = content_dict.get('proposed_test_plan', [])
+                    if plan:
+                        html_content += "<h3>Proposed Test Plan</h3>\n"
+                        for t in plan:
+                            prio = str(t.get('priority', 'Medium')).upper()
+                            prio_colors = {'HIGH': '#ef4444', 'MEDIUM': '#f59e0b', 'LOW': '#3b82f6'}
+                            p_color = prio_colors.get(prio, '#6b7280')
+                            
+                            t_type = str(t.get('test_type', 'unit')).upper()
+                            
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Test Case</div><div class='item-val'><strong>{str(t.get('name', ''))}</strong> <span style='background:#475569;color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;margin-left:4px;'>{t_type}</span> <span style='background:{p_color};color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;margin-left:4px;'>{prio} PRIORITY</span></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>What it tests</div><div class='item-val'>{str(t.get('what_it_tests', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Implementation</div><div class='item-val'><code>{str(t.get('how_to_implement', ''))}</code></div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Frameworks
+                    frameworks = content_dict.get('framework_choices', [])
+                    if frameworks:
+                        html_content += "<h3>Framework Choices</h3>\n"
+                        for f in frameworks:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Framework</div><div class='item-val'><strong>{str(f.get('framework', ''))}</strong></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Why Chosen</div><div class='item-val'>{str(f.get('why_chosen', ''))}</div></div>"
+                            features = f.get('key_features_used', [])
+                            if features:
+                                html_content += f"<div class='item-row'><div class='item-key'>Key Features</div><div class='item-val'>{'<br>'.join('• ' + str(feat) for feat in features)}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    strategies = [
+                        ('Mocking Strategy', content_dict.get('mocking_strategy', '')),
+                        ('CI Integration', content_dict.get('ci_integration', '')),
+                        ('Testing Philosophy', content_dict.get('testing_philosophy', ''))
+                    ]
+                    for title, content in strategies:
+                        if content:
+                            html_content += f"<h3>{title}</h3>\n"
+                            html_content += f"<p>{markdown2.markdown(str(content)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    gaps = content_dict.get('coverage_gaps', [])
+                    if gaps:
+                        html_content += "<h3>Known Coverage Gaps (Honest Assessment)</h3>\n<ul>\n"
+                        for g in gaps:
+                            html_content += f"<li>{str(g)}</li>\n"
+                        html_content += "</ul>\n"
+
+                elif sid == 12:
+                    # === Section 12: Scalability & Production ===
+                    overview = content_dict.get('scalability_overview', '')
+                    if overview:
+                        html_content += "<h3>Scalability Overview</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(overview)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    # Bottlenecks
+                    bottlenecks = content_dict.get('bottlenecks', [])
+                    if bottlenecks:
+                        html_content += "<h3>Identified Bottlenecks</h3>\n"
+                        for b in bottlenecks:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Bottleneck</div><div class='item-val'><strong>{str(b.get('area', ''))}</strong></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Description</div><div class='item-val'>{str(b.get('description', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Impact</div><div class='item-val' style='color:#ef4444;'>{str(b.get('impact', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Solution</div><div class='item-val' style='color:#22c55e;'>{str(b.get('solution', ''))}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Code Smells
+                    smells = content_dict.get('code_smells', [])
+                    if smells:
+                        html_content += "<h3>Technical Debt & Code Smells</h3>\n"
+                        for s in smells:
+                            sev = str(s.get('severity', 'Medium')).upper()
+                            sev_colors = {'HIGH': '#ef4444', 'MEDIUM': '#f59e0b', 'LOW': '#3b82f6'}
+                            s_color = sev_colors.get(sev, '#6b7280')
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Code Smell</div><div class='item-val'><strong>{str(s.get('smell', ''))}</strong> <span style='background:{s_color};color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;'>{sev} SEVERITY</span></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Location</div><div class='item-val'><code>{str(s.get('location', ''))}</code></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Proposed Fix</div><div class='item-val'>{str(s.get('fix', ''))}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Security Audit
+                    sec = content_dict.get('security_audit', [])
+                    if sec:
+                        html_content += "<h3>Security Audit</h3>\n"
+                        for s in sec:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Security Area</div><div class='item-val'><strong>{str(s.get('area', ''))}</strong></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Current State</div><div class='item-val'>{str(s.get('current_state', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Recommendation</div><div class='item-val' style='color:#0284c7;'>{str(s.get('recommendation', ''))}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    strategies = [
+                        ('Scaling Strategy (100+ Concurrent Users)', content_dict.get('scaling_strategy', '')),
+                        ('Ideal Production Architecture', content_dict.get('production_architecture', ''))
+                    ]
+                    for title, content in strategies:
+                        if content:
+                            html_content += f"<h3>{title}</h3>\n"
+                            html_content += f"<p>{markdown2.markdown(str(content)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    for title, key in [('Performance Optimizations', 'performance_optimizations'), ('Monitoring Gaps', 'monitoring_gaps')]:
+                        items = content_dict.get(key, [])
+                        if items:
+                            html_content += f"<h3>{title}</h3>\n<ul>\n"
+                            for i in items:
+                                html_content += f"<li>{str(i)}</li>\n"
+                            html_content += "</ul>\n"
+
+                elif sid == 13:
+                    # === Section 13: Deployment & Infra ===
+                    overview = content_dict.get('deployment_overview', '')
+                    if overview:
+                        html_content += "<h3>Deployment Overview</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(overview)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    # Environments
+                    envs = content_dict.get('environments', [])
+                    if envs:
+                        html_content += "<h3>Deployment Environments</h3>\n"
+                        for env in envs:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Environment</div><div class='item-val'><strong>{str(env.get('name', ''))}</strong></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Description</div><div class='item-val'>{str(env.get('description', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>How to Run</div><div class='item-val'>{str(env.get('how_to_run', ''))}</div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Differences</div><div class='item-val'>{str(env.get('differences', ''))}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Infra Components
+                    infra = content_dict.get('infra_components', [])
+                    if infra:
+                        html_content += "<h3>Infrastructure Components</h3>\n"
+                        for comp in infra:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Component</div><div class='item-val'><strong>{str(comp.get('component', ''))}</strong></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Technology</div><div class='item-val'><code>{str(comp.get('technology', ''))}</code></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Purpose</div><div class='item-val'>{str(comp.get('purpose', ''))}</div></div>"
+                            config_notes = comp.get('configuration_notes', '')
+                            if config_notes:
+                                html_content += f"<div class='item-row'><div class='item-key'>Config Notes</div><div class='item-val'><em>{str(config_notes)}</em></div></div>"
+                            html_content += "</div>\n"
+                    
+                    # CI/CD Pipeline
+                    cicd = content_dict.get('cicd_pipeline', [])
+                    if cicd:
+                        html_content += "<h3>CI/CD Pipeline</h3>\n"
+                        for step in cicd:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Stage</div><div class='item-val'><strong>{str(step.get('name', ''))}</strong></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Description</div><div class='item-val'>{str(step.get('description', ''))}</div></div>"
+                            tools = step.get('tools_used', [])
+                            if tools:
+                                html_content += f"<div class='item-row'><div class='item-key'>Tools</div><div class='item-val'>{', '.join(str(t) for t in tools)}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Containerization
+                    container = content_dict.get('containerization', '')
+                    if container:
+                        html_content += "<h3>Containerization</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(container)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    # Monitoring & Logging
+                    monitoring = content_dict.get('monitoring_and_logging', '')
+                    if monitoring:
+                        html_content += "<h3>Monitoring & Logging</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(monitoring)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    # Disaster Recovery
+                    dr = content_dict.get('disaster_recovery', '')
+                    if dr:
+                        html_content += "<h3>Disaster Recovery</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(dr)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    # Cost Analysis
+                    cost = content_dict.get('cost_analysis', '')
+                    if cost:
+                        html_content += "<h3>Cost Analysis</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(cost)).replace('<p>','').replace('</p>','')}</p>\n"
+                    
+                    # Production Readiness Checklist
+                    checklist = content_dict.get('production_readiness_checklist', [])
+                    if checklist:
+                        html_content += "<h3>Production Readiness Checklist</h3>\n<ul>\n"
+                        for item in checklist:
+                            html_content += f"<li>{str(item)}</li>\n"
+                        html_content += "</ul>\n"
+                    
+                    # Interview Talking Points
+                    talking = content_dict.get('interview_talking_points', '')
+                    if talking:
+                        html_content += "<h3>Interview Talking Points</h3>\n"
+                        html_content += f"<p>{markdown2.markdown(str(talking)).replace('<p>','').replace('</p>','')}</p>\n"
+
+                elif sid == 14:
+                    # === Section 14: Interview Question Bank ===
+                    # Question Categories
+                    categories = content_dict.get('question_categories', [])
+                    if categories:
+                        for cat in categories:
+                            cat_name = cat.get('category_name', 'Questions')
+                            html_content += f"<h3>{str(cat_name)}</h3>\n"
+                            questions = cat.get('questions', [])
+                            for q in questions:
+                                diff = q.get('difficulty', 'Intermediate')
+                                diff_colors = {'Basic': '#22c55e', 'Intermediate': '#f97316', 'Advanced': '#ef4444'}
+                                diff_color = diff_colors.get(diff, '#6b7280')
+                                html_content += "<div class='item-card'>"
+                                html_content += f"<div class='item-row'><div class='item-key'>Question</div><div class='item-val'><strong>{str(q.get('question', ''))}</strong> <span style='background:{diff_color};color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;'>{diff}</span></div></div>"
+                                html_content += f"<div class='item-row'><div class='item-key'>Model Answer</div><div class='item-val'>{str(q.get('model_answer', ''))}</div></div>"
+                                followups = q.get('follow_ups', [])
+                                if followups:
+                                    fu_html = ''
+                                    for fu in followups:
+                                        if isinstance(fu, dict):
+                                            fu_html += f"→ <strong>{str(fu.get('question', ''))}</strong><br><em style='color:#9ca3af;margin-left:16px;'>{str(fu.get('talking_points', ''))}</em><br>"
+                                        else:
+                                            fu_html += f"→ {str(fu)}<br>"
+                                    html_content += f"<div class='item-row'><div class='item-key'>Follow-ups</div><div class='item-val'>{fu_html}</div></div>"
+                                terms = q.get('key_terms', [])
+                                if terms:
+                                    terms_html = ' '.join(f"<span style='background:#1e293b;color:#94a3b8;padding:2px 8px;border-radius:3px;font-size:9pt;margin-right:4px;'>{str(t)}</span>" for t in terms)
+                                    html_content += f"<div class='item-row'><div class='item-key'>Key Terms</div><div class='item-val'>{terms_html}</div></div>"
+                                html_content += "</div>\n"
+                    
+                    # Curveball Questions
+                    curveballs = content_dict.get('curveball_questions', [])
+                    if curveballs:
+                        html_content += "<h3>Curveball Questions</h3>\n"
+                        for q in curveballs:
+                            html_content += "<div class='item-card'>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Question</div><div class='item-val'><strong>{str(q.get('question', ''))}</strong> <span style='background:#a855f7;color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;'>CURVEBALL</span></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Model Answer</div><div class='item-val'>{str(q.get('model_answer', ''))}</div></div>"
+                            followups = q.get('follow_ups', [])
+                            if followups:
+                                fu_html = ''
+                                for fu in followups:
+                                    if isinstance(fu, dict):
+                                        fu_html += f"→ <strong>{str(fu.get('question', ''))}</strong><br><em style='color:#9ca3af;margin-left:16px;'>{str(fu.get('talking_points', ''))}</em><br>"
+                                    else:
+                                        fu_html += f"→ {str(fu)}<br>"
+                                html_content += f"<div class='item-row'><div class='item-key'>Follow-ups</div><div class='item-val'>{fu_html}</div></div>"
+                            html_content += "</div>\n"
+                    
+                    # Red Flags to Avoid
+                    red_flags = content_dict.get('red_flags_to_avoid', [])
+                    if red_flags:
+                        html_content += "<h3>Red Flags to Avoid</h3>\n<ul>\n"
+                        for rf in red_flags:
+                            html_content += f"<li style='color:#ef4444;'>{str(rf)}</li>\n"
+                        html_content += "</ul>\n"
+                    
+                    # Confidence Builders
+                    builders = content_dict.get('confidence_builders', [])
+                    if builders:
+                        html_content += "<h3>Confidence Builders</h3>\n<ul>\n"
+                        for cb in builders:
+                            html_content += f"<li style='color:#22c55e;'>{str(cb)}</li>\n"
+                        html_content += "</ul>\n"
+                    
+                    # Weak Spots & Deflections
+                    weak = content_dict.get('weak_spots_and_deflections', [])
+                    if weak:
+                        html_content += "<h3>Weak Spots & Graceful Deflections</h3>\n<ul>\n"
+                        for ws in weak:
+                            html_content += f"<li>{str(ws)}</li>\n"
+                        html_content += "</ul>\n"
+
                 else:
-                    for key, val in content_dict.items():
+                    primitives = {k: v for k, v in content_dict.items() if not isinstance(v, (list, dict))}
+                    complex_items = {k: v for k, v in content_dict.items() if isinstance(v, (list, dict))}
+
+                    if primitives:
+                        html_content += "<div class='item-card'>"
+                        for key, val in primitives.items():
+                            formatted_key = key.replace('_', ' ').title()
+                            val_html = markdown2.markdown(str(val)).replace('<p>', '').replace('</p>', '').strip()
+                            html_content += f"<div class='item-row'><div class='item-key'>{formatted_key}</div><div class='item-val'>{val_html}</div></div>"
+                        html_content += "</div>\n"
+
+                    for key, val in complex_items.items():
                         title = ' '.join(word.capitalize() for word in key.split('_'))
                         html_content += f"<h3>{title}</h3>\n"
                         
@@ -1116,8 +1524,6 @@ def generate_pdf(project_name):
                                 formatted_key = k.replace('_', ' ').title()
                                 html_content += f"<div class='item-row'><div class='item-key'>{formatted_key}</div><div class='item-val'>{markdown2.markdown(str(v)).replace('<p>','').replace('</p>','')}</div></div>"
                             html_content += "</div>"
-                        else:
-                            html_content += markdown2.markdown(str(val))
             else:
                 html_content += markdown2.markdown(str(s['content']))
             

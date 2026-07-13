@@ -8,8 +8,8 @@ from .database import ProjectDB
 
 class ExtractionPipeline:
 
-    def __init__(self, repo_url, token, base_dir='my_projects'):
-        self.fetcher = GitHubFetcher(repo_url, token)
+    def __init__(self, repo_url, token, base_dir='my_projects', ignore_patterns=None):
+        self.fetcher = GitHubFetcher(repo_url, token, ignore_patterns=ignore_patterns)
         self.repo_name = self.fetcher.repo
         self.project_dir = os.path.join(base_dir, self.repo_name)
         self.db_path = os.path.join(self.project_dir, 'project.db')

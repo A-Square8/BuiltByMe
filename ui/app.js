@@ -88,6 +88,7 @@ async function clearPat() {
 async function startExtraction() {
     const repoUrl = $('repoUrl').value.trim();
     const token = $('accessToken').value.trim();
+    const ignorePatterns = $('ignorePatterns') ? $('ignorePatterns').value.trim() : '';
     if (!repoUrl) { showError('Please enter a GitHub repository URL'); return; }
     if (!repoUrl.includes('github.com/')) { showError('Please enter a valid GitHub URL'); return; }
     startExtractionBtn.disabled = true;
@@ -95,7 +96,7 @@ async function startExtraction() {
     progressArea.style.display = 'block';
     updateProgress('Starting extraction...', 0, '');
     try {
-        const resp = await fetch(`${API}/api/extract`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ repo_url: repoUrl, token: token || null }) });
+        const resp = await fetch(`${API}/api/extract`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ repo_url: repoUrl, token: token || null, ignore_patterns: ignorePatterns }) });
         const data = await resp.json();
         if (!resp.ok) { showError(data.error || 'Failed to start extraction'); startExtractionBtn.disabled = false; return; }
         pollExtractionStatus(data.project_name);

@@ -456,16 +456,45 @@ def extract_generic(source, lang_name):
     import_types = {'import_statement', 'import_declaration', 'import_from_statement', 'use_declaration', 'preproc_include', 'import_spec'}
     func_types = {'function_definition', 'function_declaration', 'method_declaration', 'function_item', 'arrow_function'}
     class_types = {'class_definition', 'class_declaration', 'class_specifier', 'struct_specifier', 'struct_item'}
+    blocks = []
     imports = [_node_text(n, source).strip() for n in _walk_tree(root, import_types)]
     functions = []
     for n in _walk_tree(root, func_types):
         name_node = n.child_by_field_name('name')
-        functions.append(_node_text(name_node, source) if name_node else 'anonymous')
+        name = _node_text(name_node, source) if name_node else 'anonymous'
+        functions.append(name)
+        blocks.append({
+            'block_type': 'function',
+            'name': name,
+            'parent_name': None,
+            'start_line': n.start_point[0] + 1,
+            'end_line': n.end_point[0] + 1,
+            'content': _node_text(n, source)
+        })
     classes = []
     for n in _walk_tree(root, class_types):
         name_node = n.child_by_field_name('name')
-        classes.append(_node_text(name_node, source) if name_node else 'anonymous')
-    return {'imports': imports, 'functions': functions, 'classes': classes}
+        name = _node_text(name_node, source) if name_node else 'anonymous'
+        classes.append(name)
+        blocks.append({
+            'block_type': 'class',
+            'name': name,
+            'parent_name': None,
+            'start_line': n.start_point[0] + 1,
+            'end_line': n.end_point[0] + 1,
+            'content': _node_text(n, source)
+        })
+        
+    if not blocks:
+        blocks.append({
+            'block_type': 'module_level',
+            'name': None,
+            'parent_name': None,
+            'start_line': 1,
+            'end_line': len(source.splitlines()),
+            'content': source.decode('utf-8', errors='replace')
+        })
+    return {'imports': imports, 'functions': functions, 'classes': classes}, blocks
 
 
 EXTRACTORS = {
@@ -484,6 +513,14 @@ EXTRACTORS = {
 
 def extract_file(source_bytes, language):
     extractor = EXTRACTORS.get(language)
+    metadata = {}
     if extractor:
-        return extractor(source_bytes)
-    return extract_generic(source_bytes, language)
+        metadata = extractor(source_bytes)
+    else:
+        return extract_generic(source_bytes, language)
+        
+    if isinstance(metadata, tuple) and len(metadata) == 2:
+        return metadata
+        
+    _, blocks = extract_generic(source_bytes, language)
+    return metadata, blocks

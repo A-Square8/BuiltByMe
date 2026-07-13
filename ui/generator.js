@@ -42,7 +42,7 @@ function initSectionStates() {
     sectionStates = {};
     SECTIONS.forEach(s => {
         sectionStates[s.id] = {
-            provider: 'groq', apiKey: '', detailLevel: (s.id === 6 || s.id === 14) ? 2 : 1,
+            provider: 'gemini', apiKey: '', detailLevel: (s.id === 6 || s.id === 14) ? 2 : 1,
             skip: false, placeholder: false, locked: false,
             customInstructions: '', strategy: '1_pass',
             status: 'idle', // idle | generating | completed
@@ -59,6 +59,9 @@ function initGeneratorForProject(projectName) {
     renderNodes();
     updateProgressRing();
     closePanel();
+    
+    const genAllBtn = document.getElementById('genAllBtnLeft') || document.getElementById('genHubBtn');
+    if (genAllBtn) genAllBtn.disabled = false;
 }
 
 // ===== Render Radial Nodes =====
@@ -284,35 +287,175 @@ function initGeneratorEvents() {
         renderNodes();
     });
 
-    // Regenerate button (UI only - just toggle status for demo)
-    document.getElementById('genRegenerateBtn').addEventListener('click', () => {
-        if (!activeSection) return;
-        const state = sectionStates[activeSection];
+    async function executeGeneration(secId) {
+        const state = sectionStates[secId];
         if (state.locked || state.skip || state.placeholder) return;
+        
+        const projectName = document.getElementById('genHubProject').textContent;
+        if (!projectName || projectName === 'Project') {
+            alert('No project selected.');
+            throw new Error('No project selected.');
+        }
+
+        if (!state.provider || !state.apiKey) {
+            alert(`Please provide an API key and select a provider for Section ${secId}.`);
+            throw new Error('Missing API key or provider.');
+        }
+
         state.status = 'generating';
         renderNodes();
         updateProgressRing();
-        // Simulate completion after 2s
-        setTimeout(() => {
-            state.status = 'completed';
+        
+        logToTerminal(`Starting extraction for Section ${secId}`);
+        if (secId !== 6) {
+            logToTerminal(`Strategy: ${state.strategy || '1_pass'}`);
+        }
+        logToTerminal(`Connecting to ${state.provider} via LLM Gateway...`);
+        
+        try {
+            if (secId === 6) {
+                // --- SECTION 6: CHUNKED PER-FRAMEWORK GENERATION ---
+                logToTerminal(`Phase 0: Discovering frameworks...`);
+                
+                const discRes = await fetch(`/api/project/${projectName}/generate_s6`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        provider: state.provider,
+                        api_key: state.apiKey,
+                        phase: 'discovery',
+                        detail_level: state.detailLevel,
+                        custom_instructions: state.customInstructions
+                    })
+                });
+                
+                const discData = await discRes.json();
+                if (!discRes.ok) throw new Error(discData.error || 'Failed during discovery');
+                
+                const frameworks = discData.frameworks || [];
+                const completed = discData.completed || [];
+                
+                logToTerminal(`Discovered ${frameworks.length} frameworks to analyze.`);
+                if (completed.length > 0) {
+                    logToTerminal(`Already completed: ${completed.join(', ')}`);
+                }
+                
+                for (let i = 0; i < frameworks.length; i++) {
+                    const fw = frameworks[i];
+                    if (completed.includes(fw.name)) continue;
+                    
+                    logToTerminal(`Phase 1: Generating deep dive for ${fw.name} (${i + 1}/${frameworks.length})...`);
+                    
+                    const diveRes = await fetch(`/api/project/${projectName}/generate_s6`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            provider: state.provider,
+                            api_key: state.apiKey,
+                            phase: 'deep_dive',
+                            framework_index: i,
+                            detail_level: state.detailLevel,
+                            custom_instructions: state.customInstructions
+                        })
+                    });
+                    
+                    const diveData = await diveRes.json();
+                    if (!diveRes.ok) {
+                        logToTerminal(`Generation paused or failed at ${fw.name}.`);
+                        throw new Error(diveData.error || `Failed on framework ${fw.name}`);
+                    }
+                    
+                    if (diveData.skipped) {
+                        logToTerminal(`[Skipped] ${fw.name} already completed.`);
+                    } else {
+                        logToTerminal(`[Saved] Deep dive for ${fw.name} completed.`);
+                    }
+                }
+                
+                logToTerminal(`Success! All frameworks for Section 6 analyzed and saved.`);
+                state.status = 'completed';
+                
+            } else {
+                // --- STANDARD GENERATION FOR OTHER SECTIONS ---
+                const res = await fetch(`/api/project/${projectName}/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        section_id: secId,
+                        provider: state.provider,
+                        api_key: state.apiKey,
+                        strategy: state.strategy || '1_pass',
+                        detail_level: state.detailLevel,
+                        custom_instructions: state.customInstructions
+                    })
+                });
+                
+                logToTerminal(`Received response from backend.`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to generate');
+                
+                if (data.passes && Array.isArray(data.passes)) {
+                    data.passes.forEach(p => {
+                        logToTerminal(`  Pass ${p.pass}: ${p.info}`);
+                        if (p.requested_files && p.requested_files.length > 0) {
+                            logToTerminal(`  Requested files: ${p.requested_files.join(', ')}`);
+                        }
+                        if (p.reasoning) {
+                            logToTerminal(`  Reasoning: ${p.reasoning}`);
+                        }
+                    });
+                }
+                
+                logToTerminal(`Success! Section ${secId} saved to project DB.`);
+                state.status = 'completed';
+            }
+        } catch (err) {
+            console.error(err);
+            logToTerminal(`ERROR: ${err.message}`);
+            state.status = 'idle';
             renderNodes();
             updateProgressRing();
-            if (activeSection) openPanel(activeSection);
-        }, 2000);
-    });
+            throw err;
+        }
+        
+        renderNodes();
+        updateProgressRing();
+        if (activeSection === secId) openPanel(secId);
+    }
 
-    // Generate All (UI demo)
+    // Regenerate button
+    const genRegenerateBtn = document.getElementById('genRegenerateBtn');
+    if (genRegenerateBtn) {
+        genRegenerateBtn.addEventListener('click', async () => {
+            if (!activeSection) return;
+            const btn = genRegenerateBtn;
+            btn.disabled = true;
+            try { await executeGeneration(activeSection); } 
+            catch(e) { /* error already logged */ }
+            finally { btn.disabled = false; }
+        });
+    }
+
+    // Generate All
     const genAllBtn = document.getElementById('genAllBtnLeft') || document.getElementById('genHubBtn');
     if (genAllBtn) {
-        genAllBtn.addEventListener('click', () => {
-            let delay = 0;
-            SECTIONS.forEach(sec => {
-                const state = sectionStates[sec.id];
-                if (state.skip || state.locked || state.placeholder) return;
-                delay += 400;
-                setTimeout(() => { state.status = 'generating'; renderNodes(); updateProgressRing(); }, delay);
-                setTimeout(() => { state.status = 'completed'; renderNodes(); updateProgressRing(); }, delay + 1500 + Math.random() * 1000);
-            });
+        genAllBtn.addEventListener('click', async () => {
+            if (!confirm('Warning: This will sequentially regenerate all unlocked sections. Continue?')) return;
+            const btn = genAllBtn;
+            btn.disabled = true;
+            try {
+                for (const sec of SECTIONS) {
+                    const state = sectionStates[sec.id];
+                    if (!state.locked && !state.skip && !state.placeholder) {
+                        await executeGeneration(sec.id);
+                    }
+                }
+                logToTerminal('Generate All completed successfully.');
+            } catch(e) {
+                logToTerminal('Generate All aborted due to an error.');
+            } finally {
+                btn.disabled = false;
+            }
         });
     }
 
@@ -321,142 +464,11 @@ function initGeneratorEvents() {
     if (genSectionBtn) {
         genSectionBtn.addEventListener('click', async () => {
             if (!activeSection) return;
-            const state = sectionStates[activeSection];
-            if (state.locked || state.skip || state.placeholder) return;
-            
-            const projectName = document.getElementById('genHubProject').textContent;
-            if (!projectName || projectName === 'Project') {
-                alert('No project selected.');
-                return;
-            }
-
-            if (!state.provider || !state.apiKey) {
-                alert('Please provide an API key and select a provider.');
-                return;
-            }
-
-            state.status = 'generating';
-            renderNodes();
-            updateProgressRing();
-            
-            logToTerminal(`Starting extraction for Section ${activeSection}`);
-            if (activeSection !== 6) {
-                logToTerminal(`Strategy: ${state.strategy || '1_pass'}`);
-            }
-            logToTerminal(`Connecting to ${state.provider} via LLM Gateway...`);
-            
-            try {
-                if (activeSection === 6) {
-                    // --- SECTION 6: CHUNKED PER-FRAMEWORK GENERATION ---
-                    logToTerminal(`Phase 0: Discovering frameworks...`);
-                    
-                    // Call discovery phase
-                    const discRes = await fetch(`/api/project/${projectName}/generate_s6`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            provider: state.provider,
-                            api_key: state.apiKey,
-                            phase: 'discovery',
-                            detail_level: state.detailLevel,
-                            custom_instructions: state.customInstructions
-                        })
-                    });
-                    
-                    const discData = await discRes.json();
-                    if (!discRes.ok) throw new Error(discData.error || 'Failed during discovery');
-                    
-                    const frameworks = discData.frameworks || [];
-                    const completed = discData.completed || [];
-                    
-                    logToTerminal(`Discovered ${frameworks.length} frameworks to analyze.`);
-                    if (completed.length > 0) {
-                        logToTerminal(`Already completed: ${completed.join(', ')}`);
-                    }
-                    
-                    // Phase 1: Deep Dives
-                    for (let i = 0; i < frameworks.length; i++) {
-                        const fw = frameworks[i];
-                        if (completed.includes(fw.name)) {
-                            continue; // Skip already completed
-                        }
-                        
-                        logToTerminal(`Phase 1: Generating deep dive for ${fw.name} (${i + 1}/${frameworks.length})...`);
-                        
-                        const diveRes = await fetch(`/api/project/${projectName}/generate_s6`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                provider: state.provider,
-                                api_key: state.apiKey,
-                                phase: 'deep_dive',
-                                framework_index: i,
-                                detail_level: state.detailLevel,
-                                custom_instructions: state.customInstructions
-                            })
-                        });
-                        
-                        const diveData = await diveRes.json();
-                        if (!diveRes.ok) {
-                            logToTerminal(`Generation paused or failed at ${fw.name}.`);
-                            throw new Error(diveData.error || `Failed on framework ${fw.name}`);
-                        }
-                        
-                        if (diveData.skipped) {
-                            logToTerminal(`[Skipped] ${fw.name} already completed.`);
-                        } else {
-                            logToTerminal(`[Saved] Deep dive for ${fw.name} completed.`);
-                        }
-                    }
-                    
-                    logToTerminal(`Success! All frameworks for Section 6 analyzed and saved.`);
-                    state.status = 'completed';
-                    
-                } else {
-                    // --- STANDARD GENERATION FOR OTHER SECTIONS ---
-                    const res = await fetch(`/api/project/${projectName}/generate`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            section_id: activeSection,
-                            provider: state.provider,
-                            api_key: state.apiKey,
-                            strategy: state.strategy || '1_pass',
-                            detail_level: state.detailLevel,
-                            custom_instructions: state.customInstructions
-                        })
-                    });
-                    
-                    logToTerminal(`Received response from backend.`);
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.error || 'Failed to generate');
-                    
-                    // Log pass details from backend
-                    if (data.passes && Array.isArray(data.passes)) {
-                        data.passes.forEach(p => {
-                            logToTerminal(`  Pass ${p.pass}: ${p.info}`);
-                            if (p.requested_files && p.requested_files.length > 0) {
-                                logToTerminal(`  Requested files: ${p.requested_files.join(', ')}`);
-                            }
-                            if (p.reasoning) {
-                                logToTerminal(`  Reasoning: ${p.reasoning}`);
-                            }
-                        });
-                    }
-                    
-                    logToTerminal(`Success! Section ${activeSection} saved to project DB.`);
-                    state.status = 'completed';
-                }
-            } catch (err) {
-                console.error(err);
-                logToTerminal(`ERROR: ${err.message}`);
-                alert(err.message);
-                state.status = 'idle';
-            }
-            
-            renderNodes();
-            updateProgressRing();
-            if (activeSection) openPanel(activeSection);
+            const btn = genSectionBtn;
+            btn.disabled = true;
+            try { await executeGeneration(activeSection); } 
+            catch(e) { /* error already logged */ }
+            finally { btn.disabled = false; }
         });
     }
 }
@@ -573,9 +585,10 @@ function initApiKeysEvents() {
             if (val.startsWith("saved_")) {
                 const idx = parseInt(val.replace("saved_", ""));
                 const k = savedApiKeys[idx];
+                // Show masked key for display, but store saved_N reference for API calls
                 document.getElementById('commonApiKey').value = k.key;
                 
-                // Sync to all sections
+                // Sync to all sections — use saved_N reference so backend can decrypt
                 SECTIONS.forEach(sec => {
                     sectionStates[sec.id].apiKey = val;
                     sectionStates[sec.id].provider = k.provider;
@@ -608,6 +621,7 @@ function initApiKeysEvents() {
             if (val.startsWith("saved_")) {
                 const idx = parseInt(val.replace("saved_", ""));
                 const k = savedApiKeys[idx];
+                // Show masked key for display, but store saved_N reference for API calls
                 document.getElementById('genApiKey').value = k.key;
                 if (activeSection) sectionStates[activeSection].apiKey = val;
                 document.getElementById('genProvider').value = k.provider;

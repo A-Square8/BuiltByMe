@@ -783,6 +783,729 @@ Examples of realistic improvised failures:
 - Frame everything positively — failures are learning opportunities.
 """
 
+# ===== Section 9: APIs & Interfaces =====
+
+class APIEndpoint(BaseModel):
+    method: str = Field(
+        ...,
+        description="HTTP method (GET, POST, PUT, DELETE, PATCH)."
+    )
+    path: str = Field(
+        ...,
+        description="The URL path (e.g., '/api/project/<project_name>/generate')."
+    )
+    purpose: str = Field(
+        ...,
+        description="Explain like: 'This is the main endpoint for generating documentation sections. The frontend calls this when you hit the Generate button.' 2-3 sentences."
+    )
+    request_body: str = Field(
+        ...,
+        description="Describe the request format: 'Takes a JSON body with section_id, provider, api_key, and strategy. The api_key can be a raw key or a saved_N reference.' If no body, say 'No request body.' 2-3 sentences."
+    )
+    response_format: str = Field(
+        ...,
+        description="Describe the response: 'Returns JSON with a message field and the generated content. On error, returns a JSON error message with a 500 status code.' 2-3 sentences."
+    )
+    auth_required: str = Field(
+        ...,
+        description="Authentication details: 'No auth — the API key is passed in the request body, not as a header. This is a local-only tool.' 1-2 sentences."
+    )
+    error_handling: str = Field(
+        ...,
+        description="How errors are handled: 'Catches exceptions and returns them as JSON with a 500 status code. The frontend shows these in the terminal logger.' 1-2 sentences."
+    )
+
+class APIDesignPattern(BaseModel):
+    pattern: str = Field(
+        ...,
+        description="Name of the API design pattern (e.g., 'RESTful Resource Routing', 'RPC-style Endpoints', 'Request-Response with Background Jobs')."
+    )
+    description: str = Field(
+        ...,
+        description="Explain the pattern: 'The API follows a RESTful-ish pattern — GET for reads, POST for writes, DELETE for removals. But the generate endpoints are more RPC-style since they trigger actions rather than CRUD operations.' 2-4 sentences."
+    )
+    examples: List[str] = Field(
+        ...,
+        description="2-3 endpoint examples that demonstrate this pattern."
+    )
+
+class Section9APIs(BaseModel):
+    api_overview: str = Field(
+        ...,
+        description="High-level overview: 'The app exposes a REST API with about 15 endpoints. Most are standard CRUD — list projects, get project details, delete sections. The interesting ones are the generation endpoints that orchestrate LLM calls.' 3-5 sentences."
+    )
+    endpoints: List[APIEndpoint] = Field(
+        ...,
+        description="List of ALL API endpoints in the application. Be comprehensive — include every route."
+    )
+    design_patterns: List[APIDesignPattern] = Field(
+        ...,
+        description="1-3 API design patterns used in the project."
+    )
+    error_strategy: str = Field(
+        ...,
+        description="Overall error handling strategy: 'Errors are caught at the route level and returned as JSON with appropriate HTTP status codes. I use try/finally to ensure database connections are always closed. The frontend parses error responses and shows them in the terminal.' 3-5 sentences."
+    )
+    rate_limiting: str = Field(
+        ...,
+        description="Rate limiting approach: 'There's no rate limiting currently since it's a local tool. For production, I'd add Flask-Limiter with per-endpoint limits — especially on the generate endpoints to prevent runaway LLM costs.' 2-4 sentences."
+    )
+    versioning: str = Field(
+        ...,
+        description="API versioning strategy: 'No versioning right now — all endpoints are under /api/. If I needed versioning, I'd prefix with /api/v1/ and use header-based versioning for breaking changes.' 2-3 sentences."
+    )
+    interview_tips: str = Field(
+        ...,
+        description="Tips for discussing this API in interviews: 'Key talking points: mention RESTful design, JSON request/response, error handling patterns, and what you'd add for production (rate limiting, auth, versioning).' 2-4 sentences."
+    )
+
+SECTION_9_SYSTEM_PROMPT = """You are a senior API engineer helping someone prepare to discuss their project's APIs and interfaces in a technical interview.
+
+You will be provided with the project's source code, route definitions, and metadata.
+
+# Instructions
+1. Identify ALL API endpoints/routes in the application.
+2. For each endpoint, document the HTTP method, path, purpose, request/response format, and error handling.
+3. Identify API design patterns used.
+4. Describe the overall error handling strategy.
+5. Cover rate limiting, versioning, and authentication approaches (or what you'd add).
+
+# CRITICAL — Writing Style
+- Write like you're answering "Walk me through your API design" in an interview.
+- Use first person: "I designed the API around RESTful principles...", "The generate endpoint takes a JSON body with..."
+- Be specific: mention actual endpoints, status codes, and payload structures from the code.
+- Short, confident sentences. Sound like a real backend engineer.
+
+# CRITICAL — Improvisation Rule
+If some aspects are missing (rate limiting, versioning, auth), describe what EXISTS and then what you'd ADD for production. Frame it as: "Currently there's no rate limiting since it's local-only, but for production I'd..."
+
+# Rules
+- Document EVERY route/endpoint visible in the codebase.
+- Be accurate about HTTP methods, paths, and payloads.
+- Don't hallucinate endpoints that don't exist.
+- Include both current state and production recommendations.
+"""
+
+# ===== Section 10: Data Models & Storage =====
+
+class DataModel(BaseModel):
+    name: str = Field(
+        ...,
+        description="Name of the data model/table/collection (e.g., 'files', 'code_blocks', 'generated_sections', 'repo_info')."
+    )
+    storage_type: str = Field(
+        ...,
+        description="Where it's stored (e.g., 'SQLite table', 'JSON file', 'In-memory dict', 'File system')."
+    )
+    purpose: str = Field(
+        ...,
+        description="Explain like: 'This table stores every file extracted from the GitHub repo — path, language, size, and parsed metadata like imports and class names.' 2-3 sentences."
+    )
+    fields: List[str] = Field(
+        ...,
+        description="Key fields/columns with brief descriptions (e.g., 'id (INTEGER PRIMARY KEY)', 'path (TEXT) — the file path relative to repo root', 'language (TEXT) — detected programming language')."
+    )
+    relationships: str = Field(
+        ...,
+        description="How this model relates to others: 'Each file has many code_blocks — that's a one-to-many relationship keyed on file_id.' 1-3 sentences. If standalone, say 'Standalone — no foreign key relationships.'"
+    )
+    access_patterns: str = Field(
+        ...,
+        description="How the data is typically accessed: 'Most queries are by file_id to get blocks for a specific file. The generated_sections table is queried by section_id when rendering the output viewer.' 2-3 sentences."
+    )
+
+class StorageDecision(BaseModel):
+    decision: str = Field(
+        ...,
+        description="The storage choice made (e.g., 'SQLite for project data', 'JSON for configuration', 'File system for PDFs')."
+    )
+    reasoning: str = Field(
+        ...,
+        description="Why this choice: 'I went with SQLite because each project is self-contained — one .db file per project. Easy to back up, easy to delete, no server to manage. For a single-user local tool, it's perfect.' 3-4 sentences."
+    )
+    trade_offs: str = Field(
+        ...,
+        description="Honest trade-offs: 'The downside is SQLite doesn't handle concurrent writes well. If I ever make this multi-user, I'd need to switch to PostgreSQL. But for now, the simplicity is worth it.' 2-3 sentences."
+    )
+    production_alternative: str = Field(
+        ...,
+        description="What you'd use in production: 'For a multi-user SaaS version, I'd use PostgreSQL with connection pooling via pgbouncer, and store generated PDFs in S3 instead of the local filesystem.' 2-3 sentences."
+    )
+
+class Section10DataModels(BaseModel):
+    data_overview: str = Field(
+        ...,
+        description="High-level overview: 'The app uses a per-project SQLite database to store everything — repo metadata, extracted files, parsed code blocks, and generated documentation sections. Config is stored in a JSON file. It's a simple but effective schema.' 3-5 sentences."
+    )
+    models: List[DataModel] = Field(
+        ...,
+        description="List of ALL data models/tables in the application. Be comprehensive."
+    )
+    storage_decisions: List[StorageDecision] = Field(
+        ...,
+        description="2-4 key storage decisions with reasoning and trade-offs."
+    )
+    schema_diagram: str = Field(
+        ...,
+        description="""A Mermaid erDiagram showing the data model relationships. Use proper ER diagram syntax.
+
+Example:
+erDiagram
+    FILES ||--o{ CODE_BLOCKS : contains
+    FILES {
+        int id PK
+        text path
+        text language
+    }
+    CODE_BLOCKS {
+        int id PK
+        int file_id FK
+        text block_type
+        text content
+    }
+
+Keep it clean with the main tables only. Use proper cardinality notation."""
+    )
+    indexing_strategy: str = Field(
+        ...,
+        description="Indexing approach: 'SQLite auto-indexes primary keys. I don't have explicit secondary indexes, which is fine for the data volumes I'm dealing with. If queries got slow, I'd add indexes on file_id in code_blocks and section_id in generated_sections.' 2-4 sentences."
+    )
+    data_lifecycle: str = Field(
+        ...,
+        description="How data flows through the system: 'Data enters when a repo is extracted — files and blocks get written. Then during generation, the LLM output gets saved as generated sections. The user can delete individual sections or nuke the whole project.' 3-5 sentences."
+    )
+    migration_strategy: str = Field(
+        ...,
+        description="Database migration approach: 'Currently no migration system — the schema is created fresh when a new project is extracted. If I needed to evolve the schema, I'd add Alembic for SQLite migrations or just version the schema in the database module.' 2-3 sentences."
+    )
+
+SECTION_10_SYSTEM_PROMPT = """You are a senior database engineer helping someone prepare to discuss their project's data models and storage in a technical interview.
+
+You will be provided with the project's source code, database modules, and metadata.
+
+# Instructions
+1. Identify ALL data models/tables/storage mechanisms in the application.
+2. For each model, document the fields, relationships, and access patterns.
+3. Create a Mermaid ER diagram showing relationships.
+4. Describe storage decisions with reasoning and trade-offs.
+5. Cover indexing, data lifecycle, and migration strategies.
+
+# Mermaid ER Diagram Rules
+- Use valid Mermaid `erDiagram` syntax.
+- Show proper cardinality: ||--o{ (one-to-many), ||--|| (one-to-one), }o--o{ (many-to-many).
+- Include key fields (PK, FK) inside entity blocks.
+- Keep it to the main tables — don't include every field.
+- Do NOT wrap in markdown code fences — just raw Mermaid starting with `erDiagram`.
+
+# CRITICAL — Writing Style
+- Write like you're answering "Tell me about your data model" in an interview.
+- Use first person: "I store each project in its own SQLite database...", "The schema is pretty straightforward..."
+- Be specific about actual table names, column types, and query patterns from the code.
+- Short, confident sentences.
+
+# CRITICAL — Improvisation Rule
+If the codebase doesn't have explicit schema documentation, analyze the database module code to infer the schema. Look at CREATE TABLE statements, INSERT queries, and SELECT queries to understand the models.
+
+# Rules
+- Document EVERY storage mechanism (databases, files, in-memory stores).
+- Be accurate about column names and types.
+- Include both current state and production recommendations.
+- Don't hallucinate tables or columns that don't exist.
+"""
+
+# ===== Section 11: Testing Strategy =====
+
+class TestCase(BaseModel):
+    name: str = Field(
+        ...,
+        description="Name of the test or test category (e.g., 'ExtractionPipeline Integration Test', 'LLM Gateway Unit Test', 'API Endpoint Tests')."
+    )
+    test_type: str = Field(
+        ...,
+        description="Type: 'unit', 'integration', 'e2e', 'performance', or 'security'."
+    )
+    what_it_tests: str = Field(
+        ...,
+        description="What this test covers: 'Tests that the extraction pipeline correctly fetches files from GitHub, parses them with Tree-sitter, and stores the results in SQLite.' 2-3 sentences."
+    )
+    how_to_implement: str = Field(
+        ...,
+        description="How you'd implement it: 'I'd mock the GitHub API responses using responses library, run the pipeline against the mock data, then assert the database contains the expected files and code blocks.' 2-4 sentences."
+    )
+    priority: str = Field(
+        ...,
+        description="Priority level: 'High', 'Medium', or 'Low'."
+    )
+
+class TestFrameworkChoice(BaseModel):
+    framework: str = Field(
+        ...,
+        description="Testing framework name (e.g., 'pytest', 'unittest', 'Jest', 'Cypress')."
+    )
+    why_chosen: str = Field(
+        ...,
+        description="Why this framework: 'I'd use pytest because it's the standard for Python projects — clean syntax, great fixture system, and excellent plugin ecosystem. parametrize is amazing for testing multiple inputs.' 2-3 sentences."
+    )
+    key_features_used: List[str] = Field(
+        ...,
+        description="Key features you'd leverage (e.g., 'Fixtures for database setup/teardown', 'parametrize for testing multiple file types', 'conftest.py for shared test config')."
+    )
+
+class Section11Testing(BaseModel):
+    testing_overview: str = Field(
+        ...,
+        description="Current state of testing: 'Honestly, the test coverage is minimal right now — this was built as a portfolio project and I prioritized features over tests. But here's my testing strategy and what I'd implement.' Be honest. 3-5 sentences."
+    )
+    current_tests: List[str] = Field(
+        ...,
+        description="List of any existing tests, or be honest: 'No formal test suite exists yet. Testing has been manual through the UI.' Include any test files found in the codebase."
+    )
+    proposed_test_plan: List[TestCase] = Field(
+        ...,
+        description="8-12 test cases you would implement, ordered by priority. Cover unit tests, integration tests, and E2E tests."
+    )
+    framework_choices: List[TestFrameworkChoice] = Field(
+        ...,
+        description="1-3 testing frameworks you'd use with reasoning."
+    )
+    mocking_strategy: str = Field(
+        ...,
+        description="How you'd handle mocking: 'The two big things to mock are the GitHub API and the LLM providers. For GitHub, I'd use the responses library to mock HTTP calls. For LLMs, I'd create a mock provider that returns predefined Pydantic objects so I can test the pipeline without burning API credits.' 3-5 sentences."
+    )
+    ci_integration: str = Field(
+        ...,
+        description="How tests would fit into CI: 'I'd set up GitHub Actions to run pytest on every push. Unit tests would run on every PR, integration tests nightly. I'd add a coverage badge to the README — aiming for 80% on core modules.' 2-4 sentences."
+    )
+    testing_philosophy: str = Field(
+        ...,
+        description="Your testing philosophy for interviews: 'I believe in testing the critical path first — the extraction pipeline and LLM gateway are the backbone, so they get tests first. I'd rather have 20 meaningful integration tests than 200 trivial unit tests.' 3-5 sentences."
+    )
+    coverage_gaps: List[str] = Field(
+        ...,
+        description="3-5 honest coverage gaps: 'No tests for the PDF generation pipeline', 'LLM response parsing is untested — if Groq changes their response format, we'd find out in production', 'No load testing for concurrent extractions'."
+    )
+
+SECTION_11_SYSTEM_PROMPT = """You are a senior QA engineer and testing advocate helping someone prepare to discuss their testing strategy in a technical interview.
+
+You will be provided with the project's source code, any test files, and metadata.
+
+# Instructions
+1. Honestly assess the current state of testing in the project.
+2. Design a comprehensive test plan with 8-12 specific test cases.
+3. Recommend testing frameworks with reasoning.
+4. Describe mocking strategies for external dependencies.
+5. Cover CI integration, testing philosophy, and coverage gaps.
+
+# CRITICAL — Honesty First
+Most portfolio projects have minimal testing. That's FINE. The interview strategy is:
+1. Be honest: "Test coverage is low — I focused on shipping features first."
+2. Show you KNOW what to test: "Here's my testing plan and priority order."
+3. Demonstrate testing knowledge: "I'd use pytest with fixtures, mock the GitHub API with responses..."
+4. Frame it positively: "If I had another sprint, the extraction pipeline would get integration tests first."
+
+# CRITICAL — Writing Style
+- Write like you're answering "What's your testing strategy?" in an interview.
+- Use first person: "I'd start by testing the extraction pipeline because...", "My approach to mocking would be..."
+- Be honest about gaps but show you know how to fill them.
+- Sound like an engineer who values testing but is pragmatic about priorities.
+- Short, direct sentences.
+
+# Test Categories to Cover
+1. **Unit Tests**: Individual functions/methods in isolation.
+2. **Integration Tests**: Multiple components working together (e.g., pipeline → database).
+3. **API/E2E Tests**: Full request/response cycles through the Flask API.
+4. **Edge Cases**: Large files, malformed input, missing API keys, network failures.
+5. **Performance Tests**: Large repos, concurrent extractions.
+
+# Rules
+- Check for actual test files in the codebase — document what exists.
+- Proposed tests should be specific to THIS project, not generic.
+- Include actual test function names and assertions you'd write.
+- Be realistic about what you'd test first (critical path) vs. later (nice-to-have).
+"""
+
+# ===== Section 12: Scalability & Production =====
+
+class Bottleneck(BaseModel):
+    area: str = Field(
+        ...,
+        description="Where the bottleneck is (e.g., 'GitHub API Rate Limiting', 'Synchronous LLM Calls', 'SQLite Write Locking', 'Single-threaded Flask')."
+    )
+    description: str = Field(
+        ...,
+        description="Explain the bottleneck: 'Right now, LLM calls are synchronous and blocking. When you generate a section, the Flask worker is locked up waiting for the LLM to respond — which can take 30-60 seconds. During that time, no other requests can be served on that worker.' 3-4 sentences."
+    )
+    impact: str = Field(
+        ...,
+        description="Impact level and explanation: 'High impact for multi-user — a single generation request blocks the entire server. For single-user, it's acceptable since you're only doing one thing at a time.' 2-3 sentences."
+    )
+    solution: str = Field(
+        ...,
+        description="How to fix it: 'Move LLM calls to a background task queue like Celery with Redis as the broker. The API would return a job ID immediately, and the frontend would poll for completion. This decouples request handling from LLM processing.' 3-4 sentences."
+    )
+
+class CodeSmell(BaseModel):
+    smell: str = Field(
+        ...,
+        description="Name of the code smell (e.g., 'God Object in main.py', 'No Input Validation', 'Hardcoded Configuration')."
+    )
+    location: str = Field(
+        ...,
+        description="Where it occurs — use module/component names, not file paths: 'The main application module — it has all routes, business logic, and PDF generation in one place.' 1-2 sentences."
+    )
+    severity: str = Field(
+        ...,
+        description="Severity: 'Low', 'Medium', or 'High'."
+    )
+    fix: str = Field(
+        ...,
+        description="How to fix it: 'Break the monolithic route file into a Flask Blueprint per feature — one for project CRUD, one for generation, one for PDF export, one for config management.' 2-3 sentences."
+    )
+
+class SecurityItem(BaseModel):
+    area: str = Field(
+        ...,
+        description="Security area (e.g., 'Input Validation', 'Secret Storage', 'CORS Configuration', 'SQL Injection')."
+    )
+    current_state: str = Field(
+        ...,
+        description="Current state: 'CORS is wide open — I'm using flask-cors with default settings, which allows any origin. Fine for local dev, dangerous for production.' 2-3 sentences."
+    )
+    recommendation: str = Field(
+        ...,
+        description="What to improve: 'Lock down CORS to specific origins. Add request validation with something like marshmallow or Pydantic. Implement rate limiting on generation endpoints to prevent API key abuse.' 2-3 sentences."
+    )
+
+class Section12Scalability(BaseModel):
+    scalability_overview: str = Field(
+        ...,
+        description="High-level assessment: 'The app is built for single-user local use, so scalability wasn't a primary concern. But if I were to scale this, the main bottlenecks would be synchronous LLM calls, SQLite limitations, and the single-process Flask server.' 3-5 sentences."
+    )
+    bottlenecks: List[Bottleneck] = Field(
+        ...,
+        description="4-6 bottlenecks identified in the system, ordered by severity."
+    )
+    code_smells: List[CodeSmell] = Field(
+        ...,
+        description="3-5 code smells or technical debt items."
+    )
+    security_audit: List[SecurityItem] = Field(
+        ...,
+        description="3-5 security considerations with current state and recommendations."
+    )
+    scaling_strategy: str = Field(
+        ...,
+        description="Overall scaling plan: 'To handle 100 concurrent users, I'd need: (1) async LLM calls with Celery, (2) PostgreSQL instead of SQLite, (3) Gunicorn with multiple workers behind Nginx, (4) Redis for caching generated sections, (5) S3 for PDF storage.' 4-6 sentences."
+    )
+    monitoring_gaps: List[str] = Field(
+        ...,
+        description="3-5 monitoring gaps: 'No request logging beyond Flask's default', 'No metrics on LLM call latency or success rate', 'No alerting for failed extractions', 'No health check endpoint'."
+    )
+    performance_optimizations: List[str] = Field(
+        ...,
+        description="3-5 performance optimizations possible: 'Cache generated sections to avoid redundant LLM calls', 'Use streaming responses for LLM output', 'Implement lazy loading for large project file lists', 'Add database connection pooling'."
+    )
+    production_architecture: str = Field(
+        ...,
+        description="""Describe the ideal production architecture: 'For production, I'd go with: Nginx as reverse proxy → Gunicorn with 4+ workers → Flask app → Celery workers for async LLM calls → PostgreSQL for data → Redis for caching and task queue → S3 for PDF storage. I'd deploy the whole thing on AWS ECS or Railway with auto-scaling based on CPU utilization.' 4-6 sentences."""
+    )
+
+SECTION_12_SYSTEM_PROMPT = """You are a senior SRE and performance engineer helping someone prepare to discuss scalability and production readiness in a technical interview.
+
+You will be provided with the project's source code, architecture, and metadata.
+
+# Instructions
+1. Identify 4-6 performance bottlenecks with concrete solutions.
+2. Find 3-5 code smells or technical debt items.
+3. Perform a security audit with 3-5 findings.
+4. Design a scaling strategy for production.
+5. Identify monitoring gaps and performance optimization opportunities.
+6. Describe the ideal production architecture.
+
+# CRITICAL — Writing Style
+- Write like you're answering "How would you scale this?" in an interview.
+- Use first person: "The biggest bottleneck is the synchronous LLM calls...", "If I needed to handle 100 users, I'd..."
+- Be honest about current limitations but show you know how to fix them.
+- Sound like an engineer who's actually thought about production systems.
+- Short, direct sentences. Be specific about technologies and numbers.
+
+# CRITICAL — No File Paths
+- Do NOT mention file paths in descriptions. Use component/module names instead.
+- WRONG: "main.py is a God Object with 1200 lines"
+- RIGHT: "The main application module is a God Object — all routes, business logic, and PDF generation live in one place."
+
+# CRITICAL — Improvisation Rule
+For portfolio projects, the honest answer is "it's not production-ready." That's fine. The interview strategy is:
+1. Acknowledge current limitations honestly.
+2. Show you understand what WOULD need to change.
+3. Demonstrate knowledge of production best practices.
+4. Give specific, actionable improvements — not vague "make it better" suggestions.
+
+# Rules
+- Ground analysis in the actual codebase.
+- Be specific about bottleneck causes and solutions.
+- Include concrete numbers (e.g., "SQLite handles ~500 writes/sec", "Gunicorn with 4 workers").
+- Security findings should be realistic and actionable.
+- Don't over-engineer — propose infrastructure appropriate for realistic scale.
+"""
+
+# ===== Section 13: Deployment & Infra =====
+
+class DeploymentEnvironment(BaseModel):
+    name: str = Field(
+        ...,
+        description="Environment name (e.g., 'Local Development', 'Staging', 'Production')."
+    )
+    description: str = Field(
+        ...,
+        description="Explain like: 'Local dev is just Flask running on localhost:5000 with debug mode on. No containerization, no reverse proxy — just raw Flask.' 2-3 sentences."
+    )
+    how_to_run: str = Field(
+        ...,
+        description="Step-by-step commands or instructions: 'Clone the repo, create a venv, pip install requirements, then python main.py. That's it.' 2-3 sentences."
+    )
+    differences: str = Field(
+        ...,
+        description="What's different about this environment: 'In dev, debug=True so you get auto-reload and the debugger PIN. In prod, you'd want Gunicorn with multiple workers and debug off.' 2-3 sentences."
+    )
+
+class CICDStep(BaseModel):
+    name: str = Field(
+        ...,
+        description="Name of the CI/CD step or pipeline stage (e.g., 'Lint & Format', 'Unit Tests', 'Build Docker Image', 'Deploy to Render')."
+    )
+    description: str = Field(
+        ...,
+        description="Explain like: 'This step runs flake8 and black to check code style. If anything fails, the pipeline stops and you get a notification.' 2-3 sentences."
+    )
+    tools_used: List[str] = Field(
+        ...,
+        description="Tools or services involved (e.g., ['GitHub Actions', 'pytest', 'Docker', 'Render'])."
+    )
+
+class InfraComponent(BaseModel):
+    component: str = Field(
+        ...,
+        description="Name of the infrastructure component (e.g., 'Web Server', 'Database', 'Reverse Proxy', 'Container Runtime')."
+    )
+    technology: str = Field(
+        ...,
+        description="Specific technology used (e.g., 'Gunicorn', 'SQLite', 'Nginx', 'Docker')."
+    )
+    purpose: str = Field(
+        ...,
+        description="Explain like an interviewer asked 'Why do you need this?': 'Gunicorn gives me multiple worker processes so the app can handle concurrent requests. Flask's built-in server is single-threaded and would choke under load.' 2-3 sentences."
+    )
+    configuration_notes: str = Field(
+        default="",
+        description="Any important configuration details: 'I'd run Gunicorn with 4 workers and a 120-second timeout because LLM calls can take a while.' 1-2 sentences."
+    )
+
+class Section13Deployment(BaseModel):
+    deployment_overview: str = Field(
+        ...,
+        description="High-level overview answering 'How is this deployed?': 'Right now it's a local-only Flask app — you clone it, install deps, and run main.py. For production, I'd containerize it with Docker and deploy to Render or Railway.' 3-5 sentences."
+    )
+    environments: List[DeploymentEnvironment] = Field(
+        ...,
+        description="List of deployment environments (dev, staging, prod). Include at least dev and a proposed production setup even if the project is local-only."
+    )
+    infra_components: List[InfraComponent] = Field(
+        ...,
+        description="Infrastructure components needed to run the application. Include both current (e.g., SQLite) and recommended production components (e.g., PostgreSQL)."
+    )
+    cicd_pipeline: List[CICDStep] = Field(
+        ...,
+        description="CI/CD pipeline steps. If no pipeline exists, describe what an ideal pipeline would look like for this project."
+    )
+    containerization: str = Field(
+        ...,
+        description="Explain the containerization strategy: 'I'd use a multi-stage Docker build — first stage installs deps and compiles Tree-sitter bindings, second stage copies the built app for a slim runtime image. The Dockerfile would expose port 5000 and run Gunicorn.' 3-5 sentences. If Docker isn't used, describe what a Dockerfile would look like."
+    )
+    monitoring_and_logging: str = Field(
+        ...,
+        description="Describe the monitoring/logging approach: 'Right now logging is basic — Flask logs to stdout. In production, I'd add structured logging with Python's logging module, ship logs to something like Datadog or CloudWatch, and set up health check endpoints.' 3-5 sentences."
+    )
+    disaster_recovery: str = Field(
+        ...,
+        description="Explain backup/recovery: 'Since the data is in SQLite files per project, backup is just copying the .db files. In production with PostgreSQL, I'd set up automated daily backups and point-in-time recovery.' 2-4 sentences."
+    )
+    cost_analysis: str = Field(
+        ...,
+        description="Rough cost estimate: 'On Render's free tier, this would run fine for personal use. For a team, a $7/month starter instance would handle it. The main cost driver is LLM API calls — Groq is free tier, Gemini has a generous free quota.' 2-4 sentences."
+    )
+    production_readiness_checklist: List[str] = Field(
+        ...,
+        description="A checklist of what's needed for production: 'Add HTTPS termination', 'Switch from SQLite to PostgreSQL', 'Add rate limiting on API endpoints', 'Set up health check endpoint at /health'. 5-10 items."
+    )
+    interview_talking_points: str = Field(
+        ...,
+        description="Key points to mention in an interview about deployment: 'If asked about deployment, I'd walk them through the local setup first, then explain how I'd productionize it — Docker, Gunicorn, PostgreSQL, CI/CD with GitHub Actions. I'd mention I chose SQLite for dev simplicity but know the trade-offs for production.' 3-5 sentences."
+    )
+
+SECTION_13_SYSTEM_PROMPT = """You are a senior DevOps engineer and SRE helping someone prepare to discuss their project's deployment and infrastructure in a technical interview.
+
+You will be provided with the project's source code, configuration files, and metadata.
+
+# Instructions
+1. Analyze the deployment setup — how the app is currently run, configured, and would be deployed.
+2. Describe deployment environments (dev, staging, prod) — even if only dev exists, describe what prod SHOULD look like.
+3. List infrastructure components both current and recommended.
+4. Design a CI/CD pipeline appropriate for this project.
+5. Cover containerization strategy, monitoring, disaster recovery, and cost.
+6. Provide a production readiness checklist.
+
+# CRITICAL — Improvisation Rule
+Most personal/portfolio projects don't have full deployment pipelines. That's fine. Your job is to:
+- Accurately describe the CURRENT setup (usually local dev)
+- Then propose a REALISTIC production deployment that the developer could actually implement
+- Make the proposals specific to THIS project's tech stack and requirements
+- Include enough detail that the developer could answer "How would you deploy this?" confidently
+
+# CRITICAL — Writing Style
+- Write like you're answering "Walk me through your deployment setup" in an interview.
+- Use first person: "I run it locally with Flask's dev server, but for production I'd...", "The way I'd set up CI/CD is..."
+- Be specific: mention actual services (Render, Railway, AWS ECS), actual tools (Gunicorn, Nginx, GitHub Actions), actual configs.
+- Short, confident sentences. Sound like someone who's actually deployed things.
+- If the project is local-only, own it: "Right now it's local-only, but here's how I'd productionize it..."
+
+# Rules
+- Ground everything in the actual codebase.
+- Don't over-engineer: propose infrastructure appropriate for the project's scale.
+- Include both current state and recommended improvements.
+- Be honest about what exists vs. what's proposed.
+"""
+
+# ===== Section 14: Interview Question Bank =====
+
+class FollowUpItem(BaseModel):
+    question: str = Field(
+        ...,
+        description="A follow-up question an interviewer might ask after hearing the main answer (e.g., 'What would you do differently at 10x scale?')."
+    )
+    talking_points: str = Field(
+        ...,
+        description="1-2 sentence talking points — quick hints on how to answer this follow-up. Like: 'Mention switching to PostgreSQL for concurrent writes, adding Redis for caching, and using Celery for background LLM calls.' Keep it as bullet-style hints, not a full answer."
+    )
+
+class InterviewQuestion(BaseModel):
+    question: str = Field(
+        ...,
+        description="A specific, technical interview question about this project. Should sound like something a real interviewer would ask (e.g., 'Why did you choose SQLite over PostgreSQL?', 'How does your extraction pipeline handle large repos?', 'Walk me through how a request flows from the UI to the LLM and back.')."
+    )
+    difficulty: str = Field(
+        ...,
+        description="One of: 'Basic', 'Intermediate', 'Advanced'."
+    )
+    category: str = Field(
+        ...,
+        description="Category of the question: 'architecture', 'design_decisions', 'tech_stack', 'performance', 'security', 'testing', 'deployment', 'debugging', 'system_design', 'behavioral', or 'deep_dive'."
+    )
+    model_answer: str = Field(
+        ...,
+        description="A comprehensive model answer written in first person, as if the developer is answering in an interview. Should be conversational, specific, and technically accurate. Do NOT mention file paths or file names in the answer — speak about components, modules, and concepts naturally without referencing exact paths. 4-8 sentences for Basic, 6-12 sentences for Intermediate, 8-15 sentences for Advanced."
+    )
+    follow_ups: List[FollowUpItem] = Field(
+        ...,
+        description="2-3 likely follow-up questions an interviewer might ask after hearing the answer, each with 1-2 sentence talking points for quick preparation."
+    )
+    key_terms: List[str] = Field(
+        ...,
+        description="3-5 technical terms or concepts to naturally mention in the answer (e.g., ['AST', 'Tree-sitter', 'structured output', 'pipeline pattern'])."
+    )
+
+class QuestionCategory(BaseModel):
+    category_name: str = Field(
+        ...,
+        description="Human-readable category name (e.g., 'Architecture & Design', 'Performance & Scalability', 'Security & Best Practices')."
+    )
+    questions: List[InterviewQuestion] = Field(
+        ...,
+        description="3-5 questions in this category, ordered from Basic to Advanced."
+    )
+
+class Section14InterviewBank(BaseModel):
+    question_categories: List[QuestionCategory] = Field(
+        ...,
+        description="5-8 categories of interview questions, each with 3-5 questions. Categories should cover: architecture, tech choices, performance, security, debugging experiences, and system design extensions."
+    )
+    curveball_questions: List[InterviewQuestion] = Field(
+        ...,
+        description="3-5 unexpected 'curveball' questions an interviewer might throw: 'If you had to rebuild this in Rust, what would change?', 'How would you add real-time collaboration?', 'What if your LLM provider goes down mid-generation?'"
+    )
+    red_flags_to_avoid: List[str] = Field(
+        ...,
+        description="5-8 things to NOT say in an interview about this project. Written as coaching advice: 'Don't say you just followed a tutorial — emphasize the design decisions YOU made.', 'Don't downplay the project — even if it's a portfolio project, frame it as solving a real problem.'"
+    )
+    confidence_builders: List[str] = Field(
+        ...,
+        description="5-8 genuinely impressive aspects of this project that the developer should confidently highlight. Written as coaching: 'You're using Tree-sitter for AST parsing — that's the same tool GitHub uses. Mention that.', 'The 2-pass retrieval strategy shows you think about token optimization — interviewers love that.'"
+    )
+    weak_spots_and_deflections: List[str] = Field(
+        ...,
+        description="3-5 potential weak spots in the project and how to gracefully address them. Written as coaching: 'If they ask about testing — be honest that coverage is low, but pivot to explaining what you WOULD test and how: unit tests for extractors, integration tests for the pipeline, E2E tests for the API.'"
+    )
+
+SECTION_14_SYSTEM_PROMPT = """You are a senior technical interviewer and career coach helping someone prepare for interviews about their project.
+
+You will be provided with the project's source code, architecture, and metadata. Your goal is to generate a comprehensive question bank that covers every angle an interviewer might take.
+
+# Instructions
+1. Generate 5-8 categories of interview questions, each with 3-5 questions at varying difficulty levels.
+2. Include model answers that sound like a confident, experienced engineer responding.
+3. For each follow-up question, provide 1-2 sentence talking points — quick hints for how to respond.
+4. Add curveball questions that test deeper understanding.
+5. Coach on red flags to avoid and confidence builders to lean into.
+6. Identify weak spots and provide graceful deflection strategies.
+
+# Question Difficulty Guidelines
+- **Basic**: "What does this project do?", "What's your tech stack?" — Warm-up questions.
+- **Intermediate**: "Why did you choose X over Y?", "How does data flow through the system?" — Shows understanding.
+- **Advanced**: "How would you scale this to 1000 concurrent users?", "What's the time complexity of your extraction pipeline?" — Tests deep knowledge.
+
+# Categories to Cover
+1. **Architecture & Design**: Overall structure, patterns, module organization.
+2. **Technology Choices**: Why specific tools/libraries were picked, trade-offs.
+3. **Performance & Scalability**: Bottlenecks, optimization opportunities, scaling strategies.
+4. **Security & Best Practices**: How secrets are managed, input validation, OWASP concerns.
+5. **Debugging & Problem Solving**: Past challenges, how they were resolved.
+6. **System Design Extensions**: "How would you add feature X?", "What if requirement Y changed?"
+7. **Code Quality & Testing**: Testing strategy, code organization, maintainability.
+8. **DevOps & Deployment**: CI/CD, containerization, monitoring.
+
+# CRITICAL — NO FILE PATHS IN MODEL ANSWERS
+- NEVER mention file paths, file names, or directory paths inside model answers (e.g., do NOT say "in core/rag_pipeline.py" or "the classifier in core/classifier.py").
+- Instead, refer to components by their logical name: "the RAG pipeline", "the urgency classifier", "the caching layer", "the extraction module".
+- The answer should sound like natural speech in an interview — nobody says "in slash core slash rag underscore pipeline dot py" out loud.
+- WRONG: "The request hits the FastAPI backend in interface/server.py, then goes to the GridMindAPI in interface/api.py."
+- RIGHT: "The request hits the FastAPI backend, then flows through the API layer to the RAG pipeline."
+
+# CRITICAL — Writing Style for Model Answers
+- Write ALL model answers like the developer is actually speaking in an interview.
+- Use first person: "So what I did was...", "The reason I went with this approach is..."
+- Be specific and technical — mention class names, patterns, and concepts, but NOT file paths.
+- Sound confident but honest: "I know SQLite isn't ideal for production, but for a single-user tool it's perfect because..."
+- Include natural speech patterns: "basically", "the idea is", "what's cool about this is"
+- Each answer should flow naturally — not bullet points, but conversational paragraphs.
+
+# CRITICAL — Follow-Up Talking Points
+- Each follow-up question MUST include 1-2 sentence talking points — quick hints for how to respond.
+- These should be concise bullet-style hints, not full model answers.
+- Example: Question: "What would you do differently at 10x scale?" → Talking points: "Mention switching to PostgreSQL for concurrent writes, adding Redis for caching, and using Celery for async LLM calls."
+
+# CRITICAL — Question Quality
+- Questions should be PROJECT-SPECIFIC, not generic. Instead of "What is Flask?", ask "Why did you choose Flask over FastAPI for this project?"
+- Follow-up questions should dig deeper into the initial answer.
+- Key terms should be things the developer should naturally weave into their answer.
+
+# Rules
+- Ground ALL questions and answers in the actual codebase.
+- Model answers must reference real components, patterns, and architecture from the project — but NOT file paths.
+- Don't include questions about features that don't exist in the codebase.
+- Make curveball questions genuinely challenging but fair.
+- Red flags and weak spots should be honest and practical.
+"""
+
 # Registry for easy dynamic access
 SECTION_SCHEMAS = {
     1: ProjectOverview,
@@ -793,6 +1516,12 @@ SECTION_SCHEMAS = {
     6: FrameworkDeepDive,  # Used per-framework in Phase 1 (not for Phase 0)
     7: Section7DesignDecisions,
     8: Section8FailureLog,
+    9: Section9APIs,
+    10: Section10DataModels,
+    11: Section11Testing,
+    12: Section12Scalability,
+    13: Section13Deployment,
+    14: Section14InterviewBank,
 }
 
 SECTION_PROMPTS = {
@@ -804,5 +1533,12 @@ SECTION_PROMPTS = {
     6: FRAMEWORK_DEEP_DIVE_PROMPT,
     7: SECTION_7_SYSTEM_PROMPT,
     8: SECTION_8_SYSTEM_PROMPT,
+    9: SECTION_9_SYSTEM_PROMPT,
+    10: SECTION_10_SYSTEM_PROMPT,
+    11: SECTION_11_SYSTEM_PROMPT,
+    12: SECTION_12_SYSTEM_PROMPT,
+    13: SECTION_13_SYSTEM_PROMPT,
+    14: SECTION_14_SYSTEM_PROMPT,
 }
+
 

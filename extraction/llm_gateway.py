@@ -25,7 +25,7 @@ def get_llm_client(provider: str, api_key: str, temperature: float = 0.2) -> Bas
             from langchain_groq import ChatGroq
             return ChatGroq(
                 api_key=api_key,
-                model_name="llama3-8b-8192",  # Defaulting to a fast model
+                model_name="llama-3.1-8b-instant",  # Defaulting to a fast model
                 temperature=temperature
             )
         elif provider == 'gemini':
