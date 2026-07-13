@@ -48,6 +48,9 @@ def _load_language(lang_name):
         elif lang_name == 'css':
             import tree_sitter_css as mod
             lang_obj = Language(mod.language())
+        elif lang_name == 'kotlin':
+            import tree_sitter_kotlin as mod
+            lang_obj = Language(mod.language())
         elif lang_name == 'json':
             import tree_sitter_json as mod
             lang_obj = Language(mod.language())

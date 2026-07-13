@@ -155,18 +155,16 @@ def extract_python(source):
 def extract_javascript(source):
     tree = parse_code(source, 'javascript')
     if not tree:
-        return {}
+        return {}, []
     root = tree.root_node
+    blocks = []
     imports = []
     for n in _walk_tree(root, {'import_statement'}):
         imports.append(_node_text(n, source).strip())
     exports = []
     for n in _walk_tree(root, {'export_statement'}):
         text = _node_text(n, source).strip()
-        if len(text) < 200:
-            exports.append(text)
-        else:
-            exports.append(text[:100] + '...')
+        exports.append(text[:100] + '...' if len(text) > 200 else text)
     functions = []
     for n in _walk_tree(root, {'function_declaration', 'arrow_function', 'function'}):
         name_node = n.child_by_field_name('name')
@@ -176,15 +174,27 @@ def extract_javascript(source):
             pname = n.parent.child_by_field_name('name')
             if pname:
                 name = _node_text(pname, source)
-        functions.append({
-            'name': name,
-            'params': _node_text(params, source).strip() if params else '()',
-        })
+        functions.append({'name': name, 'params': _node_text(params, source).strip() if params else '()'})
+        blocks.append({'block_type': 'function', 'name': name, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
     classes = []
     for n in _walk_tree(root, {'class_declaration'}):
         name_node = n.child_by_field_name('name')
-        classes.append({'name': _node_text(name_node, source) if name_node else '?'})
-    return {'imports': imports, 'exports': exports, 'functions': functions, 'classes': classes}
+        cname = _node_text(name_node, source) if name_node else '?'
+        classes.append({'name': cname})
+        blocks.append({'block_type': 'class', 'name': cname, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
+        body = n.child_by_field_name('body')
+        if body:
+            for m in _walk_tree(body, {'method_definition'}):
+                mn = m.child_by_field_name('name')
+                mname = _node_text(mn, source) if mn else '?'
+                blocks.append({'block_type': 'method', 'name': mname, 'parent_name': cname,
+                                'start_line': m.start_point[0]+1, 'end_line': m.end_point[0]+1, 'content': _node_text(m, source)})
+    if not blocks:
+        blocks.append({'block_type': 'module_level', 'name': None, 'parent_name': None,
+                        'start_line': 1, 'end_line': len(source.splitlines()), 'content': source.decode('utf-8', errors='replace')})
+    return {'imports': imports, 'exports': exports, 'functions': functions, 'classes': classes}, blocks
 
 
 def extract_typescript(source):
@@ -192,13 +202,9 @@ def extract_typescript(source):
     if not tree:
         return extract_javascript(source)
     root = tree.root_node
-    imports = []
-    for n in _walk_tree(root, {'import_statement'}):
-        imports.append(_node_text(n, source).strip())
-    exports = []
-    for n in _walk_tree(root, {'export_statement'}):
-        text = _node_text(n, source).strip()
-        exports.append(text[:150] if len(text) > 150 else text)
+    blocks = []
+    imports = [_node_text(n, source).strip() for n in _walk_tree(root, {'import_statement'})]
+    exports = [_node_text(n, source).strip()[:150] for n in _walk_tree(root, {'export_statement'})]
     functions = []
     for n in _walk_tree(root, {'function_declaration', 'arrow_function'}):
         name_node = n.child_by_field_name('name')
@@ -207,22 +213,36 @@ def extract_typescript(source):
         name = _node_text(name_node, source) if name_node else 'anonymous'
         if n.parent and n.parent.type == 'variable_declarator':
             pname = n.parent.child_by_field_name('name')
-            if pname:
-                name = _node_text(pname, source)
-        functions.append({
-            'name': name,
-            'params': _node_text(params, source).strip() if params else '()',
-            'return_type': _node_text(ret, source).strip() if ret else None,
-        })
+            if pname: name = _node_text(pname, source)
+        functions.append({'name': name, 'params': _node_text(params, source).strip() if params else '()',
+                          'return_type': _node_text(ret, source).strip() if ret else None})
+        blocks.append({'block_type': 'function', 'name': name, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
     classes = []
     for n in _walk_tree(root, {'class_declaration'}):
         name_node = n.child_by_field_name('name')
-        classes.append({'name': _node_text(name_node, source) if name_node else '?'})
+        cname = _node_text(name_node, source) if name_node else '?'
+        classes.append({'name': cname})
+        blocks.append({'block_type': 'class', 'name': cname, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
+        body = n.child_by_field_name('body')
+        if body:
+            for m in _walk_tree(body, {'method_definition', 'public_field_definition'}):
+                mn = m.child_by_field_name('name')
+                mname = _node_text(mn, source) if mn else '?'
+                blocks.append({'block_type': 'method', 'name': mname, 'parent_name': cname,
+                                'start_line': m.start_point[0]+1, 'end_line': m.end_point[0]+1, 'content': _node_text(m, source)})
     interfaces = []
     for n in _walk_tree(root, {'interface_declaration'}):
         name_node = n.child_by_field_name('name')
-        interfaces.append({'name': _node_text(name_node, source) if name_node else '?'})
-    return {'imports': imports, 'exports': exports, 'functions': functions, 'classes': classes, 'interfaces': interfaces}
+        iname = _node_text(name_node, source) if name_node else '?'
+        interfaces.append({'name': iname})
+        blocks.append({'block_type': 'class', 'name': iname, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
+    if not blocks:
+        blocks.append({'block_type': 'module_level', 'name': None, 'parent_name': None,
+                        'start_line': 1, 'end_line': len(source.splitlines()), 'content': source.decode('utf-8', errors='replace')})
+    return {'imports': imports, 'exports': exports, 'functions': functions, 'classes': classes, 'interfaces': interfaces}, blocks
 
 
 def extract_java(source):
@@ -230,44 +250,51 @@ def extract_java(source):
     if not tree:
         return {}
     root = tree.root_node
-    imports = []
-    for n in _walk_tree(root, {'import_declaration'}):
-        imports.append(_node_text(n, source).strip())
+    blocks = []
+    imports = [_node_text(n, source).strip() for n in _walk_tree(root, {'import_declaration'})]
     classes = []
-    for n in _walk_tree(root, {'class_declaration'}):
+    for n in _walk_tree(root, {'class_declaration', 'interface_declaration', 'enum_declaration'}):
         name_node = n.child_by_field_name('name')
+        cname = _node_text(name_node, source) if name_node else '?'
         superclass = n.child_by_field_name('superclass')
-        interfaces = n.child_by_field_name('interfaces')
+        interfaces_node = n.child_by_field_name('interfaces')
         annotations = []
-        if n.prev_sibling and n.prev_sibling.type == 'marker_annotation':
+        if n.prev_sibling and n.prev_sibling.type in ('marker_annotation', 'annotation'):
             annotations.append(_node_text(n.prev_sibling, source).strip())
-        classes.append({
-            'name': _node_text(name_node, source) if name_node else '?',
+        classes.append({'name': cname,
             'extends': _node_text(superclass, source).strip() if superclass else None,
-            'implements': _node_text(interfaces, source).strip() if interfaces else None,
-            'annotations': annotations,
-        })
+            'implements': _node_text(interfaces_node, source).strip() if interfaces_node else None,
+            'annotations': annotations})
+        blocks.append({'block_type': 'class', 'name': cname, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
+        body = n.child_by_field_name('body')
+        if body:
+            for m in _walk_tree(body, {'method_declaration', 'constructor_declaration'}):
+                mn = m.child_by_field_name('name')
+                mname = _node_text(mn, source) if mn else '?'
+                blocks.append({'block_type': 'method', 'name': mname, 'parent_name': cname,
+                                'start_line': m.start_point[0]+1, 'end_line': m.end_point[0]+1, 'content': _node_text(m, source)})
     methods = []
     for n in _walk_tree(root, {'method_declaration', 'constructor_declaration'}):
         name_node = n.child_by_field_name('name')
         params = n.child_by_field_name('parameters')
         ret = n.child_by_field_name('type')
-        methods.append({
-            'name': _node_text(name_node, source) if name_node else '?',
+        methods.append({'name': _node_text(name_node, source) if name_node else '?',
             'params': _node_text(params, source).strip() if params else '()',
-            'return_type': _node_text(ret, source).strip() if ret else None,
-        })
-    return {'imports': imports, 'classes': classes, 'methods': methods}
+            'return_type': _node_text(ret, source).strip() if ret else None})
+    if not blocks:
+        blocks.append({'block_type': 'module_level', 'name': None, 'parent_name': None,
+                        'start_line': 1, 'end_line': len(source.splitlines()), 'content': source.decode('utf-8', errors='replace')})
+    return {'imports': imports, 'classes': classes, 'methods': methods}, blocks
 
 
 def extract_c_cpp(source, lang='c'):
     tree = parse_code(source, lang)
     if not tree:
-        return {}
+        return {}, []
     root = tree.root_node
-    includes = []
-    for n in _walk_tree(root, {'preproc_include'}):
-        includes.append(_node_text(n, source).strip())
+    blocks = []
+    includes = [_node_text(n, source).strip() for n in _walk_tree(root, {'preproc_include'})]
     functions = []
     for n in _walk_tree(root, {'function_definition'}):
         declarator = n.child_by_field_name('declarator')
@@ -286,47 +313,53 @@ def extract_c_cpp(source, lang='c'):
                 dn = fn_decl.child_by_field_name('declarator')
                 if dn:
                     name = _node_text(dn, source)
-        functions.append({
-            'name': name,
-            'return_type': _node_text(ret, source).strip() if ret else None,
-        })
+        functions.append({'name': name, 'return_type': _node_text(ret, source).strip() if ret else None})
+        blocks.append({'block_type': 'function', 'name': name, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
     structs = []
     for n in _walk_tree(root, {'struct_specifier'}):
         name_node = n.child_by_field_name('name')
-        structs.append({'name': _node_text(name_node, source) if name_node else 'anonymous'})
+        sname = _node_text(name_node, source) if name_node else 'anonymous'
+        structs.append({'name': sname})
+        blocks.append({'block_type': 'class', 'name': sname, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
     classes = []
     if lang == 'cpp':
         for n in _walk_tree(root, {'class_specifier'}):
             name_node = n.child_by_field_name('name')
-            classes.append({'name': _node_text(name_node, source) if name_node else '?'})
+            cname = _node_text(name_node, source) if name_node else '?'
+            classes.append({'name': cname})
+            blocks.append({'block_type': 'class', 'name': cname, 'parent_name': None,
+                            'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
+    if not blocks:
+        blocks.append({'block_type': 'module_level', 'name': None, 'parent_name': None,
+                        'start_line': 1, 'end_line': len(source.splitlines()), 'content': source.decode('utf-8', errors='replace')})
     result = {'includes': includes, 'functions': functions, 'structs': structs}
     if classes:
         result['classes'] = classes
-    return result
+    return result, blocks
 
 
 def extract_go(source):
     tree = parse_code(source, 'go')
     if not tree:
-        return {}
+        return {}, []
     root = tree.root_node
+    blocks = []
     imports = []
     for n in _walk_tree(root, {'import_declaration', 'import_spec'}):
         text = _node_text(n, source).strip()
-        if text.startswith('import'):
-            imports.append(text)
-        else:
-            imports.append(f'import {text}')
+        imports.append(text if text.startswith('import') else f'import {text}')
     functions = []
     for n in _walk_tree(root, {'function_declaration', 'method_declaration'}):
         name_node = n.child_by_field_name('name')
         params = n.child_by_field_name('parameters')
         result = n.child_by_field_name('result')
-        functions.append({
-            'name': _node_text(name_node, source) if name_node else '?',
-            'params': _node_text(params, source).strip() if params else '()',
-            'return_type': _node_text(result, source).strip() if result else None,
-        })
+        fname = _node_text(name_node, source) if name_node else '?'
+        functions.append({'name': fname, 'params': _node_text(params, source).strip() if params else '()',
+            'return_type': _node_text(result, source).strip() if result else None})
+        blocks.append({'block_type': 'function', 'name': fname, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
     structs = []
     for n in _walk_tree(root, {'type_declaration'}):
         for c in n.children:
@@ -334,44 +367,60 @@ def extract_go(source):
                 name_node = c.child_by_field_name('name')
                 type_node = c.child_by_field_name('type')
                 kind = type_node.type if type_node else 'unknown'
-                structs.append({
-                    'name': _node_text(name_node, source) if name_node else '?',
-                    'kind': kind,
-                })
-    return {'imports': imports, 'functions': functions, 'types': structs}
+                sname = _node_text(name_node, source) if name_node else '?'
+                structs.append({'name': sname, 'kind': kind})
+                blocks.append({'block_type': 'class', 'name': sname, 'parent_name': None,
+                                'start_line': c.start_point[0]+1, 'end_line': c.end_point[0]+1, 'content': _node_text(c, source)})
+    if not blocks:
+        blocks.append({'block_type': 'module_level', 'name': None, 'parent_name': None,
+                        'start_line': 1, 'end_line': len(source.splitlines()), 'content': source.decode('utf-8', errors='replace')})
+    return {'imports': imports, 'functions': functions, 'types': structs}, blocks
 
 
 def extract_rust(source):
     tree = parse_code(source, 'rust')
     if not tree:
-        return {}
+        return {}, []
     root = tree.root_node
-    uses = []
-    for n in _walk_tree(root, {'use_declaration'}):
-        uses.append(_node_text(n, source).strip())
+    blocks = []
+    uses = [_node_text(n, source).strip() for n in _walk_tree(root, {'use_declaration'})]
     functions = []
     for n in _walk_tree(root, {'function_item'}):
         name_node = n.child_by_field_name('name')
         params = n.child_by_field_name('parameters')
         ret = n.child_by_field_name('return_type')
-        functions.append({
-            'name': _node_text(name_node, source) if name_node else '?',
-            'params': _node_text(params, source).strip() if params else '()',
-            'return_type': _node_text(ret, source).strip() if ret else None,
-        })
+        fname = _node_text(name_node, source) if name_node else '?'
+        functions.append({'name': fname, 'params': _node_text(params, source).strip() if params else '()',
+            'return_type': _node_text(ret, source).strip() if ret else None})
+        blocks.append({'block_type': 'function', 'name': fname, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
     structs = []
     for n in _walk_tree(root, {'struct_item'}):
         name_node = n.child_by_field_name('name')
-        structs.append({'name': _node_text(name_node, source) if name_node else '?'})
+        sname = _node_text(name_node, source) if name_node else '?'
+        structs.append({'name': sname})
+        blocks.append({'block_type': 'class', 'name': sname, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
     impls = []
     for n in _walk_tree(root, {'impl_item'}):
         name_node = n.child_by_field_name('type')
         trait_node = n.child_by_field_name('trait')
-        impls.append({
-            'type': _node_text(name_node, source) if name_node else '?',
-            'trait': _node_text(trait_node, source).strip() if trait_node else None,
-        })
-    return {'uses': uses, 'functions': functions, 'structs': structs, 'impls': impls}
+        impl_name = _node_text(name_node, source) if name_node else '?'
+        impls.append({'type': impl_name, 'trait': _node_text(trait_node, source).strip() if trait_node else None})
+        blocks.append({'block_type': 'class', 'name': f'impl {impl_name}', 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
+        # Extract methods inside impl blocks
+        body = n.child_by_field_name('body')
+        if body:
+            for m in _walk_tree(body, {'function_item'}):
+                mn = m.child_by_field_name('name')
+                mname = _node_text(mn, source) if mn else '?'
+                blocks.append({'block_type': 'method', 'name': mname, 'parent_name': impl_name,
+                                'start_line': m.start_point[0]+1, 'end_line': m.end_point[0]+1, 'content': _node_text(m, source)})
+    if not blocks:
+        blocks.append({'block_type': 'module_level', 'name': None, 'parent_name': None,
+                        'start_line': 1, 'end_line': len(source.splitlines()), 'content': source.decode('utf-8', errors='replace')})
+    return {'uses': uses, 'functions': functions, 'structs': structs, 'impls': impls}, blocks
 
 
 def extract_html(source):
@@ -451,11 +500,11 @@ def extract_css(source):
 def extract_generic(source, lang_name):
     tree = parse_code(source, lang_name)
     if not tree:
-        return {}
+        return {}, []
     root = tree.root_node
-    import_types = {'import_statement', 'import_declaration', 'import_from_statement', 'use_declaration', 'preproc_include', 'import_spec'}
-    func_types = {'function_definition', 'function_declaration', 'method_declaration', 'function_item', 'arrow_function'}
-    class_types = {'class_definition', 'class_declaration', 'class_specifier', 'struct_specifier', 'struct_item'}
+    import_types = {'import_statement', 'import_declaration', 'import_from_statement', 'use_declaration', 'preproc_include', 'import_spec', 'import_header', 'import_directive'}
+    func_types = {'function_definition', 'function_declaration', 'method_declaration', 'function_item', 'arrow_function', 'function_item'}
+    class_types = {'class_definition', 'class_declaration', 'class_specifier', 'struct_specifier', 'struct_item', 'interface_declaration', 'object_declaration', 'companion_object', 'enum_declaration'}
     blocks = []
     imports = [_node_text(n, source).strip() for n in _walk_tree(root, import_types)]
     functions = []
@@ -497,6 +546,41 @@ def extract_generic(source, lang_name):
     return {'imports': imports, 'functions': functions, 'classes': classes}, blocks
 
 
+def extract_kotlin(source):
+    tree = parse_code(source, 'kotlin')
+    if not tree:
+        return {}, []
+    root = tree.root_node
+    blocks = []
+    imports = []
+    for n in _walk_tree(root, {'import_header'}):
+        imports.append(_node_text(n, source).strip())
+    functions = []
+    for n in _walk_tree(root, {'function_declaration'}):
+        name_node = n.child_by_field_name('identifier') or n.child_by_field_name('name')
+        fname = _node_text(name_node, source) if name_node else '?'
+        functions.append({'name': fname})
+        blocks.append({'block_type': 'function', 'name': fname, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
+    classes = []
+    for n in _walk_tree(root, {'class_declaration', 'object_declaration', 'companion_object'}):
+        name_node = n.child_by_field_name('identifier') or n.child_by_field_name('name')
+        cname = _node_text(name_node, source) if name_node else '?'
+        classes.append({'name': cname})
+        blocks.append({'block_type': 'class', 'name': cname, 'parent_name': None,
+                        'start_line': n.start_point[0]+1, 'end_line': n.end_point[0]+1, 'content': _node_text(n, source)})
+        body = n.child_by_field_name('body') or n.child_by_field_name('class_body')
+        if body:
+            for m in _walk_tree(body, {'function_declaration'}):
+                mn = m.child_by_field_name('identifier') or m.child_by_field_name('name')
+                mname = _node_text(mn, source) if mn else '?'
+                blocks.append({'block_type': 'method', 'name': mname, 'parent_name': cname,
+                                'start_line': m.start_point[0]+1, 'end_line': m.end_point[0]+1, 'content': _node_text(m, source)})
+    if not blocks:
+        blocks.append({'block_type': 'module_level', 'name': None, 'parent_name': None,
+                        'start_line': 1, 'end_line': len(source.splitlines()), 'content': source.decode('utf-8', errors='replace')})
+    return {'imports': imports, 'functions': functions, 'classes': classes}, blocks
+
 EXTRACTORS = {
     'python': extract_python,
     'javascript': extract_javascript,
@@ -508,6 +592,7 @@ EXTRACTORS = {
     'rust': extract_rust,
     'html': extract_html,
     'css': extract_css,
+    'kotlin': extract_kotlin,
 }
 
 

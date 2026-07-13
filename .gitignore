@@ -20,9 +20,13 @@ ENV/
 .master.key
 config.json
 my_projects/
+scratch.py
+testing/
+
+# Logs
+*.log
 
 # IDE / OS
 .vscode/
 .idea/
 .DS_Store
-flask.log

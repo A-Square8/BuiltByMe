@@ -791,34 +791,70 @@ def generate_pdf(project_name):
         <head>
             <meta charset="utf-8">
             <style>
-                @page {{ size: A4; margin: 20mm; }}
-                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1f2937; line-height: 1.6; font-size: 11pt; }}
-                h1 {{ color: #111827; font-size: 28pt; border-bottom: 2px solid #f97316; padding-bottom: 8px; margin-top: 0; }}
-                h2 {{ color: #ea580c; font-size: 24pt; margin-top: 35px; page-break-before: always; border-bottom: 2px solid #ea580c; padding-bottom: 5px; }}
-                h3 {{ color: #374151; font-size: 16pt; margin-top: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }}
-                h4 {{ color: #4b5563; font-size: 14pt; margin-top: 15px; border-bottom: 1px solid #f3f4f6; padding-bottom: 4px; }}
-                h5 {{ color: #111827; font-size: 12pt; margin-top: 0; margin-bottom: 8px; }}
-                .title-page {{ height: 90vh; display: flex; flex-direction: column; justify-content: center; text-align: center; page-break-after: always; }}
-                .title-page h1 {{ border: none; font-size: 36pt; margin-bottom: 10px; color: #111827; }}
-                .title-page p {{ font-size: 16pt; color: #6b7280; }}
-                pre {{ background: #f3f4f6; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5pt; border: 1px solid #e5e7eb; white-space: pre-wrap; word-break: break-word; }}
-                code {{ background: #f3f4f6; padding: 2px 4px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5pt; white-space: pre-wrap; word-break: break-word; }}
-                ul {{ margin-top: 8px; margin-bottom: 16px; padding-left: 20px; }}
-                li {{ margin-bottom: 6px; }}
-                .item-card {{ background: #ffffff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: table; width: 100%; box-sizing: border-box; page-break-inside: avoid; }}
+                @page {{ size: A4; margin: 18mm; @bottom-center {{ content: counter(page); font-family: -apple-system, sans-serif; font-size: 9pt; color: #9ca3af; }} }}
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.7; font-size: 10.5pt; }}
+                h1 {{ color: #0f172a; font-size: 28pt; border-bottom: 3px solid #f97316; padding-bottom: 12px; margin-top: 0; font-weight: 800; }}
+                h2 {{ color: #ffffff; background-color: #0f172a; font-size: 20pt; margin-top: 40px; page-break-before: always; padding: 16px 24px; border-radius: 8px; border-left: 6px solid #f97316; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }}
+                h3 {{ color: #f97316; font-size: 15pt; margin-top: 24px; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }}
+                h4 {{ color: #334155; font-size: 13pt; margin-top: 16px; margin-bottom: 10px; font-weight: 600; }}
+                h5 {{ color: #0f172a; font-size: 11.5pt; margin-top: 12px; margin-bottom: 8px; font-weight: 600; }}
+                
+                .title-page {{ height: 85vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; page-break-after: always; }}
+                .title-page-inner {{ background: #f8fafc; padding: 40px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); width: 80%; margin: 0 auto; }}
+                .title-page h1 {{ border: none; font-size: 42pt; margin-bottom: 16px; color: #0f172a; text-align: center; }}
+                .title-page p {{ font-size: 16pt; color: #64748b; margin-top: 0; }}
+                .title-page .badge {{ display: inline-block; background: #fff7ed; color: #ea580c; padding: 8px 16px; border-radius: 999px; font-size: 12pt; font-weight: 600; border: 1px solid #fed7aa; margin-top: 24px; }}
+                
+                pre {{ background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9pt; border: 1px solid #1e293b; white-space: pre-wrap; word-break: break-word; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); line-height: 1.5; }}
+                code {{ background: #f1f5f9; color: #ea580c; padding: 3px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9pt; font-weight: 500; border: 1px solid #e2e8f0; }}
+                pre code {{ background: transparent; color: inherit; padding: 0; border: none; }}
+                
+                ul {{ margin-top: 8px; margin-bottom: 16px; padding-left: 24px; color: #475569; }}
+                li {{ margin-bottom: 8px; }}
+                li::marker {{ color: #f97316; }}
+                
+                .item-card {{ background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); display: table; width: 100%; box-sizing: border-box; page-break-inside: avoid; border-left: 4px solid #cbd5e1; }}
                 .item-row {{ display: table-row; }}
-                .item-key {{ font-weight: 600; color: #4b5563; display: table-cell; width: 25%; padding-right: 15px; padding-bottom: 10px; vertical-align: top; word-break: break-word; font-size: 11pt; }}
-                .item-val {{ display: table-cell; width: 75%; padding-bottom: 10px; vertical-align: top; font-size: 11pt; }}
-                p {{ margin-top: 0; margin-bottom: 12px; }}
-                .placeholder-note {{ color: #9ca3af; font-style: italic; padding: 20px 0; }}
+                .item-key {{ font-weight: 600; color: #64748b; display: table-cell; width: 22%; padding-right: 16px; padding-bottom: 12px; vertical-align: top; word-break: break-word; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.5px; }}
+                .item-val {{ display: table-cell; width: 78%; padding-bottom: 12px; vertical-align: top; font-size: 10.5pt; color: #1e293b; }}
+                .item-row:last-child .item-key, .item-row:last-child .item-val {{ padding-bottom: 0; }}
+                
+                p {{ margin-top: 0; margin-bottom: 16px; }}
+                .placeholder-note {{ color: #94a3b8; font-style: italic; padding: 24px; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1; text-align: center; margin-top: 20px; }}
+                
+                /* Badges */
+                .badge-green {{ background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 8.5pt; font-weight: 700; border: 1px solid #bbf7d0; display: inline-block; }}
+                .badge-orange {{ background: #ffedd5; color: #c2410c; padding: 2px 8px; border-radius: 4px; font-size: 8.5pt; font-weight: 700; border: 1px solid #fed7aa; display: inline-block; }}
+                .badge-red {{ background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 8.5pt; font-weight: 700; border: 1px solid #fecaca; display: inline-block; }}
+                .badge-gray {{ background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 4px; font-size: 8.5pt; font-weight: 700; border: 1px solid #e2e8f0; display: inline-block; }}
+                .badge-purple {{ background: #f3e8ff; color: #6b21a8; padding: 2px 8px; border-radius: 4px; font-size: 8.5pt; font-weight: 700; border: 1px solid #e9d5ff; display: inline-block; }}
+                .badge-blue {{ background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-size: 8.5pt; font-weight: 700; border: 1px solid #bfdbfe; display: inline-block; }}
+                
+                /* Callout Boxes */
+                .callout-success {{ background: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px; border-radius: 0 8px 8px 0; margin-bottom: 16px; color: #166534; }}
+                .callout-warning {{ background: #fffbeb; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 0 8px 8px 0; margin-bottom: 16px; color: #b45309; }}
+                .callout-danger {{ background: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; border-radius: 0 8px 8px 0; margin-bottom: 16px; color: #b91c1c; }}
             </style>
         </head>
         <body>
             <div class="title-page">
-                <h1>Interview Prep: {project_title}</h1>
-                <p>Generated by BuiltByMe</p>
+                <div class="title-page-inner">
+                    <h1>{project_title}</h1>
+                    <p>Technical Documentation & Interview Guide</p>
+                    <div class="badge">Generated by BuiltByMe</div>
+                </div>
             </div>
+            
+            <!-- Table of Contents -->
+            <h2>Table of Contents</h2>
+            <ul style="list-style-type: none; padding-left: 0;">
         """
+        
+        # Build TOC
+        for s in sections:
+            if s['section_id'] not in skip_sections:
+                html_content += f"<li style='margin-bottom: 12px; font-size: 12pt; border-bottom: 1px dotted #cbd5e1; padding-bottom: 4px;'><strong style='color: #f97316;'>Section {s['section_id']}:</strong> {str(s['name'])}</li>\n"
+        html_content += "</ul>\n"
         
         for s in sections:
             sid = s['section_id']
@@ -831,7 +867,7 @@ def generate_pdf(project_name):
             
             # Placeholder sections — heading only, blank content
             if sid in placeholder_sections:
-                html_content += "<p class='placeholder-note'>(This section is intentionally left blank for manual completion.)</p>\n"
+                html_content += "<div class='placeholder-note'><p style='margin:0; font-size: 14pt;'>✍️</p><p style='margin-top:8px; margin-bottom:0;'>This section is intentionally left blank for manual completion.</p></div>\n"
                 continue
             
             content_dict = None
@@ -997,8 +1033,15 @@ def generate_pdf(project_name):
                         html_content += "<h3>Core Functions & Classes</h3>\n"
                         for item in core_items:
                             html_content += "<div class='item-card'>"
-                            kind_badge = item.get('kind', 'function').upper()
-                            html_content += f"<div class='item-row'><div class='item-key'>Name</div><div class='item-val'><strong>{str(item.get('name', ''))}</strong> <span style='background:#f97316;color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;'>{kind_badge}</span></div></div>"
+                            kind_val = str(item.get('kind', 'function')).lower()
+                            if kind_val in ['class', 'struct']:
+                                badge_class = 'badge-blue'
+                            elif kind_val in ['method', 'interface']:
+                                badge_class = 'badge-purple'
+                            else:
+                                badge_class = 'badge-orange'
+                            kind_badge = kind_val.upper()
+                            html_content += f"<div class='item-row'><div class='item-key'>Name</div><div class='item-val'><strong style='font-size:12pt; color:#0f172a;'>{str(item.get('name', ''))}</strong> &nbsp;<span class='{badge_class}'>{kind_badge}</span></div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>File</div><div class='item-val'><code>{str(item.get('file_location', ''))}</code> ({str(item.get('line_range', ''))})</div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>Purpose</div><div class='item-val'>{str(item.get('purpose', ''))}</div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>Inputs</div><div class='item-val'>{str(item.get('inputs', ''))}</div></div>"
@@ -1093,7 +1136,7 @@ def generate_pdf(project_name):
                         for fail in failures:
                             category_badge = str(fail.get('category', '')).upper()
                             html_content += "<div class='item-card'>"
-                            html_content += f"<div class='item-row'><div class='item-key'>Problem</div><div class='item-val'><strong>{str(fail.get('title', ''))}</strong> <span style='background:#ef4444;color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;'>{category_badge}</span></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Problem</div><div class='item-val'><strong>{str(fail.get('title', ''))}</strong> &nbsp;<span class='badge-red'>{category_badge}</span></div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>What Happened</div><div class='item-val'>{str(fail.get('what_happened', ''))}</div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>Initial Approach</div><div class='item-val'>{str(fail.get('initial_approach', ''))}</div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>Root Cause</div><div class='item-val'>{str(fail.get('root_cause', ''))}</div></div>"
@@ -1114,11 +1157,19 @@ def generate_pdf(project_name):
                         html_content += "<h3>API Endpoints</h3>\n"
                         for ep in endpoints:
                             method = str(ep.get('method', 'GET')).upper()
-                            method_colors = {'GET': '#3b82f6', 'POST': '#10b981', 'PUT': '#f59e0b', 'DELETE': '#ef4444', 'PATCH': '#8b5cf6'}
-                            m_color = method_colors.get(method, '#6b7280')
+                            if method == 'GET':
+                                m_class = 'badge-blue'
+                            elif method == 'POST':
+                                m_class = 'badge-green'
+                            elif method in ('PUT', 'PATCH'):
+                                m_class = 'badge-orange'
+                            elif method == 'DELETE':
+                                m_class = 'badge-red'
+                            else:
+                                m_class = 'badge-gray'
                             
                             html_content += "<div class='item-card'>"
-                            html_content += f"<div class='item-row'><div class='item-key'>Endpoint</div><div class='item-val'><span style='background:{m_color};color:#fff;padding:2px 6px;border-radius:3px;font-weight:bold;font-size:9pt;margin-right:8px;'>{method}</span> <code>{str(ep.get('path', ''))}</code></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Endpoint</div><div class='item-val'><span class='{m_class}'>{method}</span> &nbsp;<code>{str(ep.get('path', ''))}</code></div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>Purpose</div><div class='item-val'>{str(ep.get('purpose', ''))}</div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>Request Body</div><div class='item-val'><code>{str(ep.get('request_body', ''))}</code></div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>Response</div><div class='item-val'><code>{str(ep.get('response_format', ''))}</code></div></div>"
@@ -1229,13 +1280,17 @@ def generate_pdf(project_name):
                         html_content += "<h3>Proposed Test Plan</h3>\n"
                         for t in plan:
                             prio = str(t.get('priority', 'Medium')).upper()
-                            prio_colors = {'HIGH': '#ef4444', 'MEDIUM': '#f59e0b', 'LOW': '#3b82f6'}
-                            p_color = prio_colors.get(prio, '#6b7280')
+                            if prio == 'HIGH':
+                                p_class = 'badge-red'
+                            elif prio == 'LOW':
+                                p_class = 'badge-blue'
+                            else:
+                                p_class = 'badge-orange'
                             
                             t_type = str(t.get('test_type', 'unit')).upper()
                             
                             html_content += "<div class='item-card'>"
-                            html_content += f"<div class='item-row'><div class='item-key'>Test Case</div><div class='item-val'><strong>{str(t.get('name', ''))}</strong> <span style='background:#475569;color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;margin-left:4px;'>{t_type}</span> <span style='background:{p_color};color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;margin-left:4px;'>{prio} PRIORITY</span></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Test Case</div><div class='item-val'><strong>{str(t.get('name', ''))}</strong> &nbsp;<span class='badge-gray'>{t_type}</span> &nbsp;<span class='{p_class}'>{prio} PRIORITY</span></div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>What it tests</div><div class='item-val'>{str(t.get('what_it_tests', ''))}</div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>Implementation</div><div class='item-val'><code>{str(t.get('how_to_implement', ''))}</code></div></div>"
                             html_content += "</div>\n"
@@ -1295,10 +1350,15 @@ def generate_pdf(project_name):
                         html_content += "<h3>Technical Debt & Code Smells</h3>\n"
                         for s in smells:
                             sev = str(s.get('severity', 'Medium')).upper()
-                            sev_colors = {'HIGH': '#ef4444', 'MEDIUM': '#f59e0b', 'LOW': '#3b82f6'}
-                            s_color = sev_colors.get(sev, '#6b7280')
+                            if sev == 'HIGH':
+                                s_class = 'badge-red'
+                            elif sev == 'LOW':
+                                s_class = 'badge-blue'
+                            else:
+                                s_class = 'badge-orange'
+                                
                             html_content += "<div class='item-card'>"
-                            html_content += f"<div class='item-row'><div class='item-key'>Code Smell</div><div class='item-val'><strong>{str(s.get('smell', ''))}</strong> <span style='background:{s_color};color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;'>{sev} SEVERITY</span></div></div>"
+                            html_content += f"<div class='item-row'><div class='item-key'>Code Smell</div><div class='item-val'><strong>{str(s.get('smell', ''))}</strong> &nbsp;<span class='{s_class}'>{sev} SEVERITY</span></div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>Location</div><div class='item-val'><code>{str(s.get('location', ''))}</code></div></div>"
                             html_content += f"<div class='item-row'><div class='item-key'>Proposed Fix</div><div class='item-val'>{str(s.get('fix', ''))}</div></div>"
                             html_content += "</div>\n"
@@ -1426,10 +1486,15 @@ def generate_pdf(project_name):
                             questions = cat.get('questions', [])
                             for q in questions:
                                 diff = q.get('difficulty', 'Intermediate')
-                                diff_colors = {'Basic': '#22c55e', 'Intermediate': '#f97316', 'Advanced': '#ef4444'}
-                                diff_color = diff_colors.get(diff, '#6b7280')
+                                if diff.lower() == 'advanced':
+                                    diff_class = 'badge-red'
+                                elif diff.lower() == 'basic':
+                                    diff_class = 'badge-green'
+                                else:
+                                    diff_class = 'badge-orange'
                                 html_content += "<div class='item-card'>"
-                                html_content += f"<div class='item-row'><div class='item-key'>Question</div><div class='item-val'><strong>{str(q.get('question', ''))}</strong> <span style='background:{diff_color};color:#fff;padding:1px 6px;border-radius:3px;font-size:9pt;'>{diff}</span></div></div>"
+                                html_content += f"<div class='item-row'><div class='item-key'>Question</div><div class='item-val'><strong style='font-size:11.5pt;'>{str(q.get('question', ''))}</strong> &nbsp;<span class='{diff_class}'>{diff}</span></div></div>"
+                                html_content += f"<div class='item-row'><div class='item-key'>Key Concept</div><div class='item-val'>{str(q.get('key_concept_tested', ''))}</div></div>"
                                 html_content += f"<div class='item-row'><div class='item-key'>Model Answer</div><div class='item-val'>{str(q.get('model_answer', ''))}</div></div>"
                                 followups = q.get('follow_ups', [])
                                 if followups:

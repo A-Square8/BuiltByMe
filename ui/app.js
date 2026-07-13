@@ -42,6 +42,15 @@ startExtractionBtn.addEventListener('click', startExtraction);
 configBtn.addEventListener('click', () => { menuDropdown.classList.remove('show'); openConfig(); });
 configClose.addEventListener('click', closeConfig);
 configOverlay.addEventListener('click', e => { if (e.target === configOverlay) closeConfig(); });
+
+// User Guide
+const guideBtn = $('guideBtn'), userGuideOverlay = $('userGuideOverlay'), closeGuideBtn = $('closeGuideBtn');
+if (guideBtn && userGuideOverlay) {
+    guideBtn.addEventListener('click', () => { menuDropdown.classList.remove('show'); userGuideOverlay.style.display = 'flex'; document.body.style.overflow = 'hidden'; });
+    closeGuideBtn.addEventListener('click', () => { userGuideOverlay.style.display = 'none'; document.body.style.overflow = ''; });
+    userGuideOverlay.addEventListener('click', e => { if (e.target === userGuideOverlay) { userGuideOverlay.style.display = 'none'; document.body.style.overflow = ''; } });
+}
+
 $('savePatBtn').addEventListener('click', savePat);
 $('clearPatBtn').addEventListener('click', clearPat);
 $('togglePatVisibility').addEventListener('click', () => {
