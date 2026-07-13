@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+
 
 # BuiltByMe
 
@@ -271,5 +271,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 *If this tool helped you, consider giving it a ⭐*
 
-</div>
-]]>
+
