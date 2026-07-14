@@ -293,12 +293,12 @@ function initGeneratorEvents() {
         
         const projectName = document.getElementById('genHubProject').textContent;
         if (!projectName || projectName === 'Project') {
-            alert('No project selected.');
+            showToast('No project selected.', 'warning');
             throw new Error('No project selected.');
         }
 
         if (!state.provider || !state.apiKey) {
-            alert(`Please provide an API key and select a provider for Section ${secId}.`);
+            showToast(`Please provide an API key and select a provider for Section ${secId}.`, 'warning');
             throw new Error('Missing API key or provider.');
         }
 
@@ -506,10 +506,10 @@ async function addApiKey(name, provider, key) {
         if (res.ok) {
             await loadApiKeys();
         } else {
-            alert('Failed to save API key');
+            showToast('Failed to save API key', 'error');
         }
     } catch (e) {
-        alert('Error saving API key');
+        showToast('Error saving API key', 'error');
     }
 }
 
@@ -541,10 +541,10 @@ window.deleteApiKey = async function(index) {
         if (res.ok) {
             await loadApiKeys();
         } else {
-            alert('Failed to delete API key');
+            showToast('Failed to delete API key', 'error');
         }
     } catch (e) {
-        alert('Error deleting API key');
+        showToast('Error deleting API key', 'error');
     }
 };
 
@@ -567,8 +567,7 @@ function initApiKeysEvents() {
             const provider = document.getElementById('newKeyProvider').value;
             const key = document.getElementById('newKeyValue').value.trim();
             if (!name || !key) {
-                alert('Please provide a name and API key.');
-                return;
+                showToast('Please provide a name and API key.', 'warning');                return;
             }
             addBtn.disabled = true;
             await addApiKey(name, provider, key);

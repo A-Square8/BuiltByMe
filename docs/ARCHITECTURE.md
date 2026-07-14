@@ -22,6 +22,7 @@ graph TD
     subgraph Server [Flask Server]
         API[API Routes\n/api/*]:::server
         PDF[PDF Generator\nWeasyPrint]:::server
+        MD[Markdown Exporter]:::server
         Key[Key Management\nFernet]:::server
     end
 
@@ -37,6 +38,7 @@ graph TD
     
     Client -->|HTTP REST| Server
     API --> PDF
+    API --> MD
     API --> Key
     API --> Pipe
     API --> LLM
@@ -139,7 +141,7 @@ Each extracted project gets its own SQLite database (`my_projects/<name>/project
 | `extraction_log` | Extraction status tracking |
 | `generated_sections` | LLM-generated content for each of the 14 sections |
 
-### 7. PDF Generator (`main.py` - `generate_pdf()`)
+### 7. PDF & Markdown Generators (`main.py`)
 
 The PDF pipeline:
 
@@ -150,6 +152,11 @@ The PDF pipeline:
 5. **Return** as a downloadable file and save a copy to the project folder
 
 **Why WeasyPrint?**: It supports CSS3 features like `@page` rules, `page-break-before`, and complex layouts that browser-based PDF generators often struggle with.
+
+The Markdown pipeline:
+1. **Load** all generated sections from SQLite
+2. **Render** each section's Pydantic JSON into structured Markdown using `_render_dict_to_markdown`
+3. **Save** as a `.md` file to the project folder and return as a downloadable file.
 
 ### 8. Key Management
 
@@ -218,6 +225,8 @@ The frontend is a single-page application built with vanilla HTML/CSS/JS (no fra
 - `currentProject` - Active project name (global in `app.js`)
 - `sectionStates` - Per-section UI state: skip, placeholder, locked, etc. (in `generator.js`)
 - `currentGeneratedSections` - Cached list of generated sections (in `app.js`)
+- `theme` - Light/dark mode preference persisted via `localStorage`
+- `toast` - Transient notification state managed via DOM appending/removing
 
 ### Communication
 

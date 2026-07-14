@@ -2,6 +2,53 @@ const API = '';
 let currentProject = null;
 let pollInterval = null;
 
+// ===== Toast Notification System =====
+const TOAST_ICONS = {
+    success: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+    error: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    info: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+    warning: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+};
+window.showToast = function(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<span class="toast-icon">${TOAST_ICONS[type] || TOAST_ICONS.info}</span><span class="toast-message">${escapeHtml(message)}</span>`;
+    container.appendChild(toast);
+    toast.addEventListener('click', () => dismissToast(toast));
+    setTimeout(() => dismissToast(toast), duration);
+};
+function dismissToast(toast) {
+    if (toast.classList.contains('toast-exit')) return;
+    toast.classList.add('toast-exit');
+    setTimeout(() => toast.remove(), 300);
+}
+
+// ===== Theme Toggle =====
+function initTheme() {
+    const saved = localStorage.getItem('builtbyme-theme') || 'dark';
+    applyTheme(saved);
+}
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const sunIcon = document.getElementById('themeIconSun');
+    const moonIcon = document.getElementById('themeIconMoon');
+    if (sunIcon && moonIcon) {
+        // Show sun icon in dark mode (to switch to light), moon in light mode (to switch to dark)
+        sunIcon.style.display = theme === 'dark' ? 'block' : 'none';
+        moonIcon.style.display = theme === 'light' ? 'block' : 'none';
+    }
+}
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('builtbyme-theme', next);
+    applyTheme(next);
+    showToast(`Switched to ${next} mode`, 'info', 2000);
+}
+initTheme();
+
 // SVG icon helpers
 const icons = {
     file: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
@@ -30,13 +77,31 @@ const progressArea = $('progressArea'), errorArea = $('errorArea');
 const configBtn = $('configBtn'), configOverlay = $('configOverlay'), configClose = $('configClose');
 
 // Menu
-menuBtn.addEventListener('click', e => { e.stopPropagation(); menuDropdown.classList.toggle('show'); if (menuDropdown.classList.contains('show')) loadProjectsList(); });
+menuBtn.addEventListener('click', e => { e.stopPropagation(); menuDropdown.classList.toggle('show'); if (menuDropdown.classList.contains('show')) { loadProjectsList(); const si = document.getElementById('projectSearchInput'); if (si) { si.value = ''; } } });
 document.addEventListener('click', () => menuDropdown.classList.remove('show'));
 menuDropdown.addEventListener('click', e => e.stopPropagation());
 addProjectBtn.addEventListener('click', () => { menuDropdown.classList.remove('show'); openModal(); });
 modalClose.addEventListener('click', closeModal);
 modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeModal(); });
 startExtractionBtn.addEventListener('click', startExtraction);
+
+// Theme toggle
+const themeToggleBtn = $('themeToggle');
+if (themeToggleBtn) themeToggleBtn.addEventListener('click', toggleTheme);
+
+// Project search
+const projectSearchInput = $('projectSearchInput');
+if (projectSearchInput) {
+    projectSearchInput.addEventListener('input', e => {
+        const query = e.target.value.toLowerCase();
+        const items = projectsList.querySelectorAll('.menu-item:not(.disabled)');
+        items.forEach(item => {
+            const name = item.textContent.toLowerCase();
+            item.style.display = name.includes(query) ? '' : 'none';
+        });
+    });
+    projectSearchInput.addEventListener('click', e => e.stopPropagation());
+}
 
 // Config
 configBtn.addEventListener('click', () => { menuDropdown.classList.remove('show'); openConfig(); });
@@ -140,7 +205,7 @@ function updateProgress(text, pct, file) {
     $('progressText').textContent = text;
     $('progressFile').textContent = file;
 }
-function showError(msg) { errorArea.style.display = 'block'; $('errorText').textContent = msg; }
+function showError(msg) { errorArea.style.display = 'block'; $('errorText').textContent = msg; showToast(msg, 'error'); }
 
 async function loadProjectsList() {
     try {
@@ -167,9 +232,9 @@ async function deleteProject(event, name) {
     if (!confirm(`Delete project '${name}'?`)) return;
     try {
         const resp = await fetch(`${API}/api/project/${name}/delete`, { method: 'DELETE' });
-        if (resp.ok) { if (currentProject === name) { currentProject = null; emptyState.style.display = 'flex'; projectView.style.display = 'none'; } loadProjectsList(); }
-        else alert('Failed to delete');
-    } catch(e) { alert('Error deleting'); }
+        if (resp.ok) { if (currentProject === name) { currentProject = null; emptyState.style.display = 'flex'; projectView.style.display = 'none'; } loadProjectsList(); showToast(`Project '${name}' deleted`, 'success'); }
+        else showToast('Failed to delete project', 'error');
+    } catch(e) { showToast('Error deleting project', 'error'); }
 }
 
 async function loadProject(name) {
@@ -344,7 +409,6 @@ if ($('generatePdfBtn')) {
         btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating...';
         btn.disabled = true;
         try {
-            // Collect skip/placeholder states from generator UI
             const skipSections = [];
             const placeholderSections = [];
             if (typeof sectionStates !== 'undefined') {
@@ -354,18 +418,12 @@ if ($('generatePdfBtn')) {
                     if (state.placeholder) placeholderSections.push(sectionId);
                 });
             }
-            
             const res = await fetch(`/api/project/${currentProject}/pdf`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    skip_sections: skipSections,
-                    placeholder_sections: placeholderSections
-                })
+                body: JSON.stringify({ skip_sections: skipSections, placeholder_sections: placeholderSections })
             });
             if (!res.ok) throw new Error('Failed to generate PDF');
-            
-            // Trigger file download
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -375,9 +433,54 @@ if ($('generatePdfBtn')) {
             a.click();
             a.remove();
             window.URL.revokeObjectURL(url);
+            showToast('PDF generated and downloaded!', 'success');
         } catch (e) {
             console.error(e);
-            alert('Failed to generate PDF: ' + e.message);
+            showToast('Failed to generate PDF: ' + e.message, 'error');
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    });
+}
+
+// ===== Export Markdown =====
+if ($('exportMarkdownBtn')) {
+    $('exportMarkdownBtn').addEventListener('click', async () => {
+        if (!currentProject) return;
+        const btn = $('exportMarkdownBtn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Exporting...';
+        btn.disabled = true;
+        try {
+            const skipSections = [];
+            const placeholderSections = [];
+            if (typeof sectionStates !== 'undefined') {
+                Object.entries(sectionStates).forEach(([id, state]) => {
+                    const sectionId = parseInt(id);
+                    if (state.skip) skipSections.push(sectionId);
+                    if (state.placeholder) placeholderSections.push(sectionId);
+                });
+            }
+            const res = await fetch(`/api/project/${currentProject}/markdown`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ skip_sections: skipSections, placeholder_sections: placeholderSections })
+            });
+            if (!res.ok) throw new Error('Failed to export Markdown');
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentProject}_docs.md`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            showToast('Markdown exported successfully!', 'success');
+        } catch (e) {
+            console.error(e);
+            showToast('Failed to export Markdown: ' + e.message, 'error');
         } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;
@@ -443,13 +546,18 @@ window.selectGeneratedSection = function(id) {
     const sec = currentGeneratedSections.find(s => s.section_id === id);
     if (!sec) return;
     
-    renderGeneratedSectionsList(); // to update active state
+    renderGeneratedSectionsList();
     
     $('generatedViewerTitle').textContent = `${id}. ${sec.name}`;
     $('generatedViewerContent').textContent = typeof sec.content === 'object' ? JSON.stringify(sec.content, null, 2) : sec.content;
     $('deleteGeneratedBtn').style.display = 'block';
     
-    // Attach delete handler (remove old listeners by replacing clone)
+    // Render formatted preview
+    renderSectionPreview(id, sec.content);
+    // Show preview tab by default
+    switchGeneratedView('preview');
+    
+    // Attach delete handler
     const delBtn = $('deleteGeneratedBtn');
     const newDelBtn = delBtn.cloneNode(true);
     delBtn.parentNode.replaceChild(newDelBtn, delBtn);
@@ -460,8 +568,227 @@ window.selectGeneratedSection = function(id) {
             const res = await fetch(`/api/project/${currentProject}/generated/${id}`, { method: 'DELETE' });
             if (!res.ok) throw new Error('Failed to delete');
             await loadGeneratedSections();
+            showToast(`${sec.name} deleted`, 'success');
         } catch(e) {
-            alert(e.message);
+            showToast(e.message, 'error');
         }
     });
 };
+
+// ===== Preview / Raw Tab Toggle =====
+function switchGeneratedView(view) {
+    const preview = $('generatedPreviewContent');
+    const raw = $('generatedViewerContent');
+    const tabPreview = $('tabPreview');
+    const tabRaw = $('tabRaw');
+    if (!preview || !raw) return;
+    if (view === 'preview') {
+        preview.style.display = 'flex';
+        raw.style.display = 'none';
+        if (tabPreview) tabPreview.classList.add('active');
+        if (tabRaw) tabRaw.classList.remove('active');
+    } else {
+        preview.style.display = 'none';
+        raw.style.display = 'block';
+        if (tabPreview) tabPreview.classList.remove('active');
+        if (tabRaw) tabRaw.classList.add('active');
+    }
+}
+if ($('tabPreview')) $('tabPreview').addEventListener('click', () => switchGeneratedView('preview'));
+if ($('tabRaw')) $('tabRaw').addEventListener('click', () => switchGeneratedView('raw'));
+
+// ===== Section Preview Renderer =====
+function renderSectionPreview(sectionId, content) {
+    const container = $('generatedPreviewContent');
+    if (!container) return;
+    if (!content || (typeof content === 'object' && Object.keys(content).length === 0)) {
+        container.innerHTML = '<div class="preview-empty">No content to preview</div>';
+        return;
+    }
+    const data = typeof content === 'string' ? (() => { try { return JSON.parse(content); } catch { return null; } })() : content;
+    if (!data || typeof data !== 'object') {
+        container.innerHTML = `<div class="preview-card"><div class="preview-field-val">${escapeHtml(String(content))}</div></div>`;
+        return;
+    }
+
+    // Section 6 has special structure: { deep_dives: [...FrameworkDeepDive] }
+    if (sectionId === 6 && data.deep_dives && Array.isArray(data.deep_dives)) {
+        container.innerHTML = renderSection6Preview(data.deep_dives);
+        return;
+    }
+
+    let html = '';
+    for (const [key, value] of Object.entries(data)) {
+        const title = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        if (Array.isArray(value)) {
+            html += renderArrayCard(title, value);
+        } else if (typeof value === 'object' && value !== null) {
+            html += `<div class="preview-card"><div class="preview-card-title">${escapeHtml(title)}</div>`;
+            for (const [k, v] of Object.entries(value)) {
+                html += renderField(k, v);
+            }
+            html += '</div>';
+        } else {
+            html += `<div class="preview-card"><div class="preview-card-title">${escapeHtml(title)}</div>`;
+            html += renderField(key, value);
+            html += '</div>';
+        }
+    }
+    container.innerHTML = html || '<div class="preview-empty">No content to preview</div>';
+}
+
+function renderSection6Preview(deepDives) {
+    let html = '';
+    deepDives.forEach((fw, idx) => {
+        const fwName = fw.framework_name || fw.name || `Framework ${idx + 1}`;
+        const category = fw.category || '';
+        html += `<div class="preview-card" style="border-left-color: ${['#f97316','#3b82f6','#22c55e','#a855f7','#ef4444','#eab308'][idx % 6]};">`;
+        html += `<div class="preview-card-title" style="font-size:15px;margin-bottom:14px;">
+            ${escapeHtml(fwName)}
+            ${category ? `<span class="preview-badge preview-badge-purple">${escapeHtml(category)}</span>` : ''}
+        </div>`;
+
+        // Basics
+        if (fw.basics && fw.basics.length > 0) {
+            html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--green-500);margin-bottom:8px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg> Basics <span class="preview-badge preview-badge-green" style="margin-left:6px;">${fw.basics.length}</span></div>`;
+            fw.basics.forEach(concept => {
+                html += renderConceptCard(concept, 'rgba(34,197,94,0.08)', 'var(--green-500)');
+            });
+            html += '</div>';
+        }
+
+        // Directly Used Concepts
+        if (fw.directly_used_concepts && fw.directly_used_concepts.length > 0) {
+            html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--orange-400);margin-bottom:8px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Directly Used <span class="preview-badge preview-badge-orange" style="margin-left:6px;">${fw.directly_used_concepts.length}</span></div>`;
+            fw.directly_used_concepts.forEach(concept => {
+                html += renderConceptCard(concept, 'rgba(249,115,22,0.08)', 'var(--orange-400)');
+            });
+            html += '</div>';
+        }
+
+        // Indirect Concepts
+        if (fw.indirect_concepts && fw.indirect_concepts.length > 0) {
+            html += `<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--blue-500);margin-bottom:8px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg> Indirect / Interview Knowledge <span class="preview-badge preview-badge-blue" style="margin-left:6px;">${fw.indirect_concepts.length}</span></div>`;
+            fw.indirect_concepts.forEach(concept => {
+                html += renderConceptCard(concept, 'rgba(59,130,246,0.08)', 'var(--blue-500)');
+            });
+            html += '</div>';
+        }
+
+        html += '</div>';
+    });
+    return html || '<div class="preview-empty">No deep dives to preview</div>';
+}
+
+function renderConceptCard(concept, bgColor, accentColor) {
+    const title = concept.title || concept.name || 'Concept';
+    const explanation = concept.explanation || '';
+    const codeSnippet = concept.code_snippet || '';
+    let html = `<div style="background:${bgColor};border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;border-left:3px solid ${accentColor};">`;
+    html += `<div style="font-weight:700;font-size:13px;color:${accentColor};margin-bottom:6px;">${escapeHtml(title)}</div>`;
+    if (explanation) {
+        html += `<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:${codeSnippet ? '8' : '0'}px;">${escapeHtml(explanation)}</div>`;
+    }
+    if (codeSnippet) {
+        html += `<pre style="background:#0d0d10;color:#d4d4d4;padding:10px 14px;border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;margin-top:4px;max-height:200px;overflow-y:auto;">${escapeHtml(codeSnippet)}</pre>`;
+    }
+    html += '</div>';
+    return html;
+}
+
+function renderArrayCard(title, value) {
+    let html = `<div class="preview-card"><div class="preview-card-title">${escapeHtml(title)} <span class="preview-badge preview-badge-blue">${value.length} items</span></div>`;
+    if (value.length === 0) {
+        html += '<div class="preview-field-val" style="font-style:italic;color:var(--text-dim);">Empty</div>';
+    } else if (typeof value[0] === 'object' && value[0] !== null) {
+        value.forEach((item, i) => {
+            html += `<div style="border-top:1px solid var(--dark-border);padding-top:10px;margin-top:10px;">`;
+            const itemName = item.name || item.title || item.question || item.framework_name || item.framework || item.technology || `Item ${i+1}`;
+            html += `<div style="font-weight:700;color:var(--orange-400);font-size:13px;margin-bottom:6px;">${escapeHtml(itemName)}</div>`;
+            for (const [k, v] of Object.entries(item)) {
+                if (['name','title','framework_name'].includes(k)) continue;
+                html += renderField(k, v);
+            }
+            html += '</div>';
+        });
+    } else {
+        html += '<ul class="preview-list">';
+        value.forEach(item => { html += `<li>${escapeHtml(String(item))}</li>`; });
+        html += '</ul>';
+    }
+    html += '</div>';
+    return html;
+}
+
+function renderField(key, value) {
+    const fieldTitle = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const isCodeField = /code_snippet|code_example|snippet|source_code/i.test(key);
+
+    if (isCodeField && typeof value === 'string' && value.trim()) {
+        return `<div class="preview-field" style="flex-direction:column;gap:6px;">
+            <div class="preview-field-key">${escapeHtml(fieldTitle)}</div>
+            <pre style="background:#0d0d10;color:#d4d4d4;padding:10px 14px;border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;max-height:200px;overflow-y:auto;margin:0;">${escapeHtml(value)}</pre>
+        </div>`;
+    }
+
+    if (Array.isArray(value)) {
+        if (value.length === 0) return '';
+        if (typeof value[0] === 'object') {
+            let nested = `<div class="preview-field" style="flex-direction:column;gap:6px;"><div class="preview-field-key">${escapeHtml(fieldTitle)} <span class="preview-badge preview-badge-blue">${value.length}</span></div>`;
+            value.forEach((item, i) => {
+                const subName = item.name || item.title || `${i+1}`;
+                nested += `<div style="padding:8px;background:rgba(255,255,255,0.02);border-radius:var(--radius-sm);border:1px solid var(--dark-border);margin-top:4px;">`;
+                nested += `<div style="font-weight:600;font-size:12px;color:var(--orange-400);margin-bottom:4px;">${escapeHtml(subName)}</div>`;
+                for (const [sk, sv] of Object.entries(item)) {
+                    if (['name','title'].includes(sk)) continue;
+                    nested += renderField(sk, sv);
+                }
+                nested += '</div>';
+            });
+            nested += '</div>';
+            return nested;
+        }
+        return `<div class="preview-field"><div class="preview-field-key">${escapeHtml(fieldTitle)}</div><div class="preview-field-val">${value.map(x => escapeHtml(String(x))).join(', ')}</div></div>`;
+    }
+
+    return `<div class="preview-field"><div class="preview-field-key">${escapeHtml(fieldTitle)}</div><div class="preview-field-val">${formatPreviewValue(value)}</div></div>`;
+}
+
+function formatPreviewValue(v) {
+    if (Array.isArray(v)) {
+        if (v.length === 0) return '<span style="color:var(--text-dim);font-style:italic;">None</span>';
+        return v.map(item => typeof item === 'object' ? escapeHtml(JSON.stringify(item)) : escapeHtml(String(item))).join(', ');
+    }
+    if (typeof v === 'boolean') return v ? '<span class="preview-badge preview-badge-green">Yes</span>' : '<span class="preview-badge preview-badge-red">No</span>';
+    if (v === null || v === undefined) return '<span style="color:var(--text-dim);font-style:italic;">N/A</span>';
+    return escapeHtml(String(v));
+}
+
+// ===== Keyboard Shortcuts =====
+document.addEventListener('keydown', (e) => {
+    // Don't trigger shortcuts when typing in inputs/textareas
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+        if (e.key === 'Escape') { document.activeElement.blur(); }
+        return;
+    }
+    // Escape — close any open modal/overlay
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        if ($('userGuideOverlay')?.style.display !== 'none' && $('userGuideOverlay')?.style.display) { $('userGuideOverlay').style.display = 'none'; document.body.style.overflow = ''; return; }
+        if ($('generatedOverlay')?.style.display !== 'none' && $('generatedOverlay')?.style.display) { $('generatedOverlay').style.display = 'none'; document.body.style.overflow = ''; return; }
+        if ($('contentViewer')?.style.display !== 'none' && $('contentViewer')?.style.display) { closeContentViewer(); return; }
+        if ($('configOverlay')?.style.display !== 'none' && $('configOverlay')?.style.display) { closeConfig(); return; }
+        if ($('modalOverlay')?.style.display !== 'none' && $('modalOverlay')?.style.display) { closeModal(); return; }
+        if (menuDropdown?.classList.contains('show')) { menuDropdown.classList.remove('show'); return; }
+        return;
+    }
+    if (!e.ctrlKey && !e.metaKey) return;
+    switch (e.key.toLowerCase()) {
+        case 'n': e.preventDefault(); menuDropdown.classList.remove('show'); openModal(); break;
+        case 'k': e.preventDefault(); menuDropdown.classList.add('show'); loadProjectsList(); setTimeout(() => { const si = $('projectSearchInput'); if (si) si.focus(); }, 100); break;
+        case ',': e.preventDefault(); menuDropdown.classList.remove('show'); openConfig(); break;
+        case 'g': e.preventDefault(); if (currentProject && $('generatePdfBtn')) $('generatePdfBtn').click(); break;
+        case 'm': e.preventDefault(); if (currentProject && $('exportMarkdownBtn')) $('exportMarkdownBtn').click(); break;
+    }
+});

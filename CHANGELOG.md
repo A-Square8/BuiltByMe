@@ -5,6 +5,28 @@ All notable changes to BuiltByMe will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-07-14
+
+### Added
+
+- **Toast Notification System** — Glassmorphic, animated toast notifications replace all native `alert()` calls. Supports 4 types: success (green), error (red), info (blue), warning (amber). Toasts auto-dismiss after 4 seconds and can be clicked to dismiss early.
+- **Dark/Light Theme Toggle** — Sun/moon toggle button in the header switches between dark and light modes. The light theme features cream/white surfaces with preserved orange accents. Theme preference is persisted in `localStorage` and restored on reload. Smooth 350ms CSS transitions on all theme properties.
+- **Section Inline Preview** — "Formatted Preview" / "Raw JSON" tab toggle in the generated content viewer. Renders section JSON as styled cards with color-coded badges, key-value layouts, and nested object support. Includes dedicated rendering for Section 6 (Technology Deep Dives) with categorized concept cards (Basics, Directly Used, Indirect) and syntax-highlighted code snippets.
+- **Project Search & Filter** — Search input inside the projects dropdown menu with real-time filtering. Accessible via `Ctrl+K` keyboard shortcut.
+- **Keyboard Shortcuts** — Power-user keyboard shortcuts: `Ctrl+N` (New Project), `Ctrl+K` (Search Projects), `Ctrl+,` (Configuration), `Ctrl+G` (Generate PDF), `Ctrl+M` (Export Markdown), `Esc` (Close any modal). Shortcuts are disabled when typing in input fields. Documented in User Guide section 15.
+- **Markdown Export** — New `POST /api/project/<name>/markdown` endpoint converts all generated sections to a structured Markdown file with table of contents, nested heading hierarchy, lists, and formatted key-value pairs. "Export Markdown" button added to the project sidebar. Respects skip/placeholder section states.
+- **User Guide: Keyboard Shortcuts** — Section 15 added to the in-app User Guide documenting all keyboard shortcuts with styled key cap badges.
+
+### Changed
+
+- All `alert()` calls across `app.js` and `generator.js` replaced with `showToast()` for consistent, non-blocking feedback.
+- Generated content viewer defaults to "Formatted Preview" tab instead of raw JSON when selecting a section.
+- Architecture diagram in README updated to include Markdown Exporter component.
+
+
+
+---
+
 ## [1.0.0] — 2026-07-13
 
 ### Added

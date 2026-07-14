@@ -22,7 +22,7 @@ BuiltByMe bridges the gap between raw source code and high-level architectural u
 
 1. **Extract** - Clone the repo via GitHub API, parse every file's AST using Tree-sitter, and store structured metadata (imports, classes, functions, methods) in a local SQLite database.
 2. **Analyze** - Send intelligent, targeted code chunks to your choice of LLM (Groq, Gemini, Nvidia) to generate structured, schema-validated documentation.
-3. **Generate** - Produce a beautiful, print-ready PDF with 14 documentation sections ranging from architecture diagrams to interview question banks.
+3. **Generate** - Produce a beautiful, print-ready PDF or Markdown file with 14 documentation sections ranging from architecture diagrams to interview question banks.
 
 > **Privacy First**: All parsing happens locally. Only the specific code chunks needed for analysis are sent to LLM providers. Your API keys are encrypted at rest.
 
@@ -37,8 +37,12 @@ BuiltByMe bridges the gap between raw source code and high-level architectural u
 | **14 Documentation Sections** | From Project Overview to Interview Question Bank |
 | **2-Pass Retrieval** | Skeleton analysis -> targeted file retrieval to optimize token usage |
 | **Premium PDF Export** | Styled reports with Mermaid diagrams, colored badges, and dark headers |
+| **Markdown Export** | Download full documentation as a structured `.md` file |
 | **Encrypted Key Vault** | Fernet-encrypted API key storage with auto-generated master key |
 | **Radial Generator UI** | Interactive section-by-section generation with per-section customization |
+| **Dark/Light Theme** | Toggle between dark and light modes with smooth transitions |
+| **Toast Notifications** | Elegant glassmorphic notifications replacing browser alerts |
+| **Keyboard Shortcuts** | Power-user shortcuts for fast navigation (`Ctrl+K`, `Ctrl+N`, etc.) |
 | **Fine-Grained Control** | Detail level slider, skip/placeholder toggles, custom instructions per section |
 
 ---
@@ -60,6 +64,7 @@ graph TD
     subgraph Server [Flask Application]
         API[REST API / main.py]:::server
         PDF[PDF Generator / WeasyPrint]:::server
+        MD[Markdown Exporter]:::server
         Vault[Key Management]:::server
     end
 
@@ -76,6 +81,7 @@ graph TD
 
     UI -->|HTTP Requests| API
     API --> PDF
+    API --> MD
     API --> Vault
     API --> Pipe
     API --> Gateway
@@ -89,6 +95,7 @@ graph TD
     Gateway -->|Generated Content| DB
     
     PDF -->|HTML to PDF| DB
+    MD -->|Sections to Markdown| DB
 ```
 
 For a detailed architecture breakdown, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -136,7 +143,20 @@ Open your browser to **http://localhost:5000** and you're ready to go.
 3. Click **Start Extraction** - watch the progress bar as files are parsed
 4. Once extracted, go to **⋮ menu** -> **Configuration** -> add your LLM API key
 5. Click any section node on the radial generator -> configure -> **Generate This Section**
-6. Click **Generate PDF** to download your report
+6. Click **Generate PDF** or **Export Markdown** to download your report
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+N` | New Project |
+| `Ctrl+K` | Search Projects |
+| `Ctrl+,` | Open Configuration |
+| `Ctrl+G` | Generate PDF |
+| `Ctrl+M` | Export Markdown |
+| `Esc` | Close any modal/overlay |
 
 ---
 
@@ -181,7 +201,7 @@ Adding new providers is straightforward - see [CONTRIBUTING.md](CONTRIBUTING.md#
 
 ```
 BuiltByMe/
-├── main.py                    # Flask server, all API routes, PDF generation
+├── main.py                    # Flask server, all API routes, PDF + Markdown generation
 ├── requirements.txt           # Python dependencies
 ├── config.json                # Local config (gitignored — auto-generated)
 ├── .master.key                # Encryption key (gitignored — auto-generated)
@@ -197,9 +217,9 @@ BuiltByMe/
 │   └── prompts.py             # Pydantic schemas + system prompts for all 14 sections
 ├── ui/                        # Frontend (served as static files)
 │   ├── index.html             # Main SPA with all modals
-│   ├── app.js                 # Core UI logic (projects, viewer, config)
+│   ├── app.js                 # Core UI logic (projects, viewer, config, themes)
 │   ├── generator.js           # Radial generator UI + section generation
-│   ├── style.css              # Base styles and design tokens
+│   ├── style.css              # Base styles, design tokens, theme system
 │   └── generator.css          # Generator-specific styles
 ├── docs/                      # Documentation
 │   ├── ARCHITECTURE.md        # Technical architecture deep-dive
@@ -235,6 +255,10 @@ When adding a project, you can specify comma-separated glob patterns to exclude 
 ```
 *.csv, docs/, *.test.js, node_modules, __pycache__
 ```
+
+### Theme
+
+Click the **☀/🌙 toggle** in the header to switch between dark and light modes. Your preference is saved automatically.
 
 ---
 

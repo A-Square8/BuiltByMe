@@ -17,6 +17,8 @@
 </head>
 
 <body>
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toastContainer"></div>
     <div id="app">
         <header>
             <div class="header-left">
@@ -37,7 +39,15 @@
                 <h1 class="logo">BuiltByMe</h1>
                 <span class="logo-badge">Studio</span>
             </div>
-            <div class="header-right">
+            <div class="header-right" style="display:flex;align-items:center;gap:8px;">
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                    <svg id="themeIconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                </button>
                 <div class="menu-container">
                     <button class="menu-btn" id="menuBtn" aria-label="Menu">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -63,6 +73,10 @@
                         <div class="menu-divider"></div>
                         <div class="menu-section">
                             <div class="menu-section-title">My Projects</div>
+                            <div class="menu-search">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                <input type="text" id="projectSearchInput" placeholder="Search projects...">
+                            </div>
                             <div id="projectsList" class="projects-list">
                                 <div class="menu-item disabled">No projects yet</div>
                             </div>
@@ -142,6 +156,10 @@
                         <button class="sidebar-btn" id="generatePdfBtn" style="border-color: rgba(168,85,247,0.3); color: var(--purple-400);">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             Generate PDF
+                        </button>
+                        <button class="sidebar-btn" id="exportMarkdownBtn" style="border-color: rgba(59,130,246,0.3); color: var(--blue-500);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                            Export Markdown
                         </button>
                     </div>
                 </div>
@@ -661,8 +679,14 @@
                             Delete Section
                         </button>
                     </div>
-                    <div style="flex: 1; overflow-y: auto; padding: 24px;">
-                        <pre id="generatedViewerContent" style="margin: 0; background: #0d0d10; padding: 24px; border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 14px; line-height: 1.7; color: #d4d4d4; white-space: pre-wrap; min-height: 100%; border: 1px solid var(--dark-border);"></pre>
+                    <!-- Preview/Raw Tabs -->
+                    <div class="preview-tabs" id="generatedViewTabs">
+                        <button class="preview-tab active" data-view="preview" id="tabPreview">Formatted Preview</button>
+                        <button class="preview-tab" data-view="raw" id="tabRaw">Raw JSON</button>
+                    </div>
+                    <div style="flex: 1; overflow-y: auto; padding: 24px;" id="generatedViewBody">
+                        <div id="generatedPreviewContent" class="preview-container"></div>
+                        <pre id="generatedViewerContent" style="margin: 0; background: #0d0d10; padding: 24px; border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 14px; line-height: 1.7; color: #d4d4d4; white-space: pre-wrap; min-height: 100%; border: 1px solid var(--dark-border); display: none;"></pre>
                     </div>
                 </div>
             </div>
@@ -762,6 +786,35 @@
 6. Centralized Config: Keep all environment variables and secrets in a dedicated config file.
 7. Pure Functions: Prefer pure functions where possible to make logic easy to parse.
 8. Git Commits: Clearly mention what you added and deleted in GitHub commits.</pre>
+                </div>
+
+                <h3 style="color: var(--white); font-size: 20px; margin-bottom: 16px; font-family: var(--font-sans); border-top: 1px solid var(--dark-border); padding-top: 32px;">15. Keyboard Shortcuts</h3>
+                <p>BuiltByMe supports keyboard shortcuts for power users:</p>
+                <div class="shortcuts-grid">
+                    <div class="shortcut-item">
+                        <div class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">N</span></div>
+                        <span class="shortcut-label">New Project</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <div class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">K</span></div>
+                        <span class="shortcut-label">Search Projects</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <div class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">,</span></div>
+                        <span class="shortcut-label">Open Configuration</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <div class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">G</span></div>
+                        <span class="shortcut-label">Generate PDF</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <div class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">M</span></div>
+                        <span class="shortcut-label">Export Markdown</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <div class="shortcut-keys"><span class="shortcut-key">Esc</span></div>
+                        <span class="shortcut-label">Close Modal / Overlay</span>
+                    </div>
                 </div>
             </div>
         </div>
