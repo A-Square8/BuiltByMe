@@ -34,6 +34,18 @@ BuiltByMe bridges the gap between raw source code and high-level architectural u
 
 ---
 
+## Screenshots
+
+<div align="center">
+  <img src="Demo/demo1.png" alt="Demo Screenshot 1" width="800" style="margin-bottom: 20px;"/>
+  <br/>
+  <img src="Demo/demo2.png" alt="Demo Screenshot 2" width="800" style="margin-bottom: 20px;"/>
+  <br/>
+  <img src="Demo/demo3.png" alt="Demo Screenshot 3" width="800" style="margin-bottom: 20px;"/>
+</div>
+
+---
+
 ## Key Features
 
 | Feature | Description |
