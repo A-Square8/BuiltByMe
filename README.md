@@ -28,6 +28,12 @@ BuiltByMe bridges the gap between raw source code and high-level architectural u
 
 ---
 
+## Sample Document
+
+**[SurakshaSetu](https://github.com/A-Square8/SurakshaSetu)**: https://drive.google.com/file/d/1WO3igBTqfqa0X_uFaZSh3maaWsKK_UvZ/view?usp=sharing
+
+---
+
 ## Key Features
 
 | Feature | Description |
