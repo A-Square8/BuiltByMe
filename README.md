@@ -55,6 +55,7 @@ BuiltByMe bridges the gap between raw source code and high-level architectural u
 | **14 Documentation Sections** | From Project Overview to Interview Question Bank |
 | **2-Pass Retrieval** | Skeleton analysis -> targeted file retrieval to optimize token usage |
 | **Premium PDF Export** | Styled reports with Mermaid diagrams, colored badges, and dark headers |
+| **PDF Color Themes** | 6 theme presets (4 light, 2 dark) — Sunrise, Ocean, Forest, Royal, Midnight, Obsidian |
 | **Markdown Export** | Download full documentation as a structured `.md` file |
 | **Encrypted Key Vault** | Fernet-encrypted API key storage with auto-generated master key |
 | **Radial Generator UI** | Interactive section-by-section generation with per-section customization |

@@ -9,7 +9,7 @@ const TOAST_ICONS = {
     info: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
     warning: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
 };
-window.showToast = function(message, type = 'info', duration = 4000) {
+window.showToast = function (message, type = 'info', duration = 4000) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
     const toast = document.createElement('div');
@@ -148,11 +148,11 @@ async function savePat() {
     const pat = $('configPat').value.trim();
     const st = $('configStatus');
     try {
-        const r = await fetch(`${API}/api/config/pat`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({pat}) });
+        const r = await fetch(`${API}/api/config/pat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pat }) });
         const d = await r.json();
         st.style.display = 'flex'; st.className = 'config-status success'; st.textContent = d.message || 'Saved successfully';
         setTimeout(() => st.style.display = 'none', 3000);
-    } catch(e) { st.style.display = 'flex'; st.className = 'config-status error'; st.textContent = 'Failed to save'; }
+    } catch (e) { st.style.display = 'flex'; st.className = 'config-status error'; st.textContent = 'Failed to save'; }
 }
 async function clearPat() {
     $('configPat').value = '';
@@ -170,11 +170,11 @@ async function startExtraction() {
     progressArea.style.display = 'block';
     updateProgress('Starting extraction...', 0, '');
     try {
-        const resp = await fetch(`${API}/api/extract`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ repo_url: repoUrl, token: token || null, ignore_patterns: ignorePatterns }) });
+        const resp = await fetch(`${API}/api/extract`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo_url: repoUrl, token: token || null, ignore_patterns: ignorePatterns }) });
         const data = await resp.json();
         if (!resp.ok) { showError(data.error || 'Failed to start extraction'); startExtractionBtn.disabled = false; return; }
         pollExtractionStatus(data.project_name);
-    } catch(err) { showError('Network error: ' + err.message); startExtractionBtn.disabled = false; }
+    } catch (err) { showError('Network error: ' + err.message); startExtractionBtn.disabled = false; }
 }
 
 function pollExtractionStatus(projectName) {
@@ -183,7 +183,7 @@ function pollExtractionStatus(projectName) {
         try {
             const resp = await fetch(`${API}/api/extract/status/${projectName}`);
             const data = await resp.json();
-            if (['extracting','fetching_info','fetching_commits','fetching_tree'].includes(data.status)) {
+            if (['extracting', 'fetching_info', 'fetching_commits', 'fetching_tree'].includes(data.status)) {
                 const pct = data.total > 0 ? Math.round((data.processed / data.total) * 100) : 0;
                 const txt = data.status === 'extracting' ? `Processing files... ${data.processed}/${data.total} (${pct}%)` : data.status.replace(/_/g, ' ') + '...';
                 updateProgress(txt, pct, data.current_file || '');
@@ -196,7 +196,7 @@ function pollExtractionStatus(projectName) {
                 showError('Extraction failed: ' + (data.errors?.[0] || 'Unknown error'));
                 startExtractionBtn.disabled = false;
             }
-        } catch(err) { console.error('Poll error:', err); }
+        } catch (err) { console.error('Poll error:', err); }
     }, 1000);
 }
 
@@ -234,7 +234,7 @@ async function deleteProject(event, name) {
         const resp = await fetch(`${API}/api/project/${name}/delete`, { method: 'DELETE' });
         if (resp.ok) { if (currentProject === name) { currentProject = null; emptyState.style.display = 'flex'; projectView.style.display = 'none'; } loadProjectsList(); showToast(`Project '${name}' deleted`, 'success'); }
         else showToast('Failed to delete project', 'error');
-    } catch(e) { showToast('Error deleting project', 'error'); }
+    } catch (e) { showToast('Error deleting project', 'error'); }
 }
 
 async function loadProject(name) {
@@ -252,16 +252,16 @@ async function loadProject(name) {
         if (data.info?.forks) meta.push(`<span class="sidebar-meta-tag">${icons.fork} ${data.info.forks}</span>`);
         if (data.files) meta.push(`<span class="sidebar-meta-tag">${icons.fileText} ${data.files.length} files</span>`);
         if (data.commits) meta.push(`<span class="sidebar-meta-tag">${icons.gitCommit} ${data.commits.length} commits</span>`);
-        if (data.info?.topics) { try { JSON.parse(data.info.topics).forEach(t => meta.push(`<span class="sidebar-meta-tag">${icons.hash} ${t}</span>`)); } catch{} }
+        if (data.info?.topics) { try { JSON.parse(data.info.topics).forEach(t => meta.push(`<span class="sidebar-meta-tag">${icons.hash} ${t}</span>`)); } catch { } }
         $('projectMeta').innerHTML = meta.join('');
-        
+
         // Initialize the radial generator view for this project
         if (typeof initGeneratorForProject === 'function') {
             initGeneratorForProject(name);
         }
-        
+
         await loadGeneratedSections();
-    } catch(err) { console.error(err); }
+    } catch (err) { console.error(err); }
 }
 
 loadProjectsList();
@@ -330,19 +330,19 @@ function showFileContent(index) {
     const meta = file.metadata || {};
     if (meta.imports && meta.imports.length > 0) {
         h += `<div class="cv-metadata-section"><h4>${icons.pkg} Imports (${meta.imports.length})</h4><div class="cv-metadata-chips">
-            ${meta.imports.map(im => `<span class="cv-metadata-chip import">${escapeHtml(typeof im==='string'?im:im.module||JSON.stringify(im))}</span>`).join('')}</div></div>`;
+            ${meta.imports.map(im => `<span class="cv-metadata-chip import">${escapeHtml(typeof im === 'string' ? im : im.module || JSON.stringify(im))}</span>`).join('')}</div></div>`;
     }
     const blocks = file.blocks || [];
     if (blocks.length > 0) {
         h += `<div class="cv-metadata-section"><h4>${icons.code} Code Chunks (${blocks.length})</h4><div class="cv-blocks-list">`;
         blocks.forEach(b => {
             let mData = null;
-            if (b.block_type === 'function') mData = (meta.functions||[]).find(f => (f.name||f) === b.name);
-            if (b.block_type === 'class') mData = (meta.classes||[]).find(c => (c.name||c) === b.name);
-            if (b.block_type === 'method') { const pc = (meta.classes||[]).find(c => (c.name||c) === b.parent_name); if (pc && pc.methods) mData = pc.methods.find(m => (m.name||m) === b.name); }
+            if (b.block_type === 'function') mData = (meta.functions || []).find(f => (f.name || f) === b.name);
+            if (b.block_type === 'class') mData = (meta.classes || []).find(c => (c.name || c) === b.name);
+            if (b.block_type === 'method') { const pc = (meta.classes || []).find(c => (c.name || c) === b.parent_name); if (pc && pc.methods) mData = pc.methods.find(m => (m.name || m) === b.name); }
             let header = b.name ? escapeHtml(b.name) : (b.block_type === 'module_level' ? 'Module Level Code' : escapeHtml(b.block_type));
             if (mData && mData.params) header += escapeHtml(mData.params);
-            const typeIcon = b.block_type==='function'?icons.fn:b.block_type==='class'?icons.box:b.block_type==='method'?icons.wrench:icons.file;
+            const typeIcon = b.block_type === 'function' ? icons.fn : b.block_type === 'class' ? icons.box : b.block_type === 'method' ? icons.wrench : icons.file;
             h += `<div class="cv-detail-card ${b.block_type}">
                 <div class="cv-detail-header" onclick="this.parentElement.classList.toggle('expanded')">
                     <strong style="display:flex;align-items:center;gap:6px;">${typeIcon} ${header}</strong>
@@ -368,14 +368,14 @@ function renderCommitsList(commits) {
     const list = $('commitsList');
     if (!commits.length) { list.innerHTML = '<div class="cv-loading">No commits found</div>'; return; }
     list.innerHTML = commits.map(c => {
-        const date = c.date ? new Date(c.date).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
-        const lines = (c.message||'').split('\n'), title = lines[0], body = lines.slice(1).join('\n').trim();
+        const date = c.date ? new Date(c.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+        const lines = (c.message || '').split('\n'), title = lines[0], body = lines.slice(1).join('\n').trim();
         return `<div class="cv-commit-item">
-            <span class="cv-commit-sha">${escapeHtml(c.sha||'')}</span>
+            <span class="cv-commit-sha">${escapeHtml(c.sha || '')}</span>
             <div class="cv-commit-body">
                 <div class="cv-commit-msg">${escapeHtml(title)}</div>
                 ${body ? `<div class="cv-commit-msg" style="font-weight:400;color:var(--gray-500);font-size:13px;margin-top:4px;">${escapeHtml(body)}</div>` : ''}
-                <div class="cv-commit-info"><span class="cv-commit-author">${escapeHtml(c.author||'')}</span>${date ? ` \u00b7 ${date}` : ''}</div>
+                <div class="cv-commit-info"><span class="cv-commit-author">${escapeHtml(c.author || '')}</span>${date ? ` \u00b7 ${date}` : ''}</div>
             </div></div>`;
     }).join('');
 }
@@ -383,8 +383,8 @@ function renderCommitsList(commits) {
 function formatSize(bytes) {
     if (!bytes) return '0 B';
     if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
-    return (bytes/(1024*1024)).toFixed(1) + ' MB';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 function escapeHtml(str) { if (!str) return ''; const d = document.createElement('div'); d.textContent = String(str); return d.innerHTML; }
 
@@ -400,6 +400,16 @@ if ($('viewGeneratedBtn')) {
         await loadGeneratedSections();
     });
 }
+
+// ===== PDF Theme Selection =====
+let selectedPdfTheme = 'sunrise';
+document.querySelectorAll('.theme-swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.theme-swatch').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedPdfTheme = btn.dataset.theme || 'sunrise';
+    });
+});
 
 if ($('generatePdfBtn')) {
     $('generatePdfBtn').addEventListener('click', async () => {
@@ -421,7 +431,11 @@ if ($('generatePdfBtn')) {
             const res = await fetch(`/api/project/${currentProject}/pdf`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ skip_sections: skipSections, placeholder_sections: placeholderSections })
+                body: JSON.stringify({ 
+                    skip_sections: skipSections, 
+                    placeholder_sections: placeholderSections,
+                    theme: selectedPdfTheme
+                })
             });
             if (!res.ok) throw new Error('Failed to generate PDF');
             const blob = await res.blob();
@@ -443,6 +457,7 @@ if ($('generatePdfBtn')) {
         }
     });
 }
+
 
 // ===== Export Markdown =====
 if ($('exportMarkdownBtn')) {
@@ -502,17 +517,17 @@ async function loadGeneratedSections() {
         if (!res.ok) throw new Error('Failed to load generated sections');
         currentGeneratedSections = await res.json();
         renderGeneratedSectionsList();
-        
+
         // Reset viewer
         activeGeneratedSectionId = null;
         $('generatedViewerTitle').textContent = 'Select a section';
         $('generatedViewerContent').textContent = '';
         $('deleteGeneratedBtn').style.display = 'none';
-        
+
         if (window.syncGeneratedStatus) {
             window.syncGeneratedStatus(currentGeneratedSections.map(s => s.section_id));
         }
-        
+
     } catch (e) {
         console.error(e);
         $('generatedList').innerHTML = `<div style="color:#ef4444; font-size:12px;">Error: ${e.message}</div>`;
@@ -522,12 +537,12 @@ async function loadGeneratedSections() {
 function renderGeneratedSectionsList() {
     const list = $('generatedList');
     if (!list) return;
-    
+
     if (currentGeneratedSections.length === 0) {
         list.innerHTML = '<div style="color:var(--text-muted); font-size:12px; padding: 10px;">No sections generated yet.</div>';
         return;
     }
-    
+
     list.innerHTML = currentGeneratedSections.map(sec => `
         <div class="cv-file-item ${activeGeneratedSectionId === sec.section_id ? 'active' : ''}" onclick="selectGeneratedSection(${sec.section_id})">
             <span class="cv-file-icon">
@@ -541,27 +556,27 @@ function renderGeneratedSectionsList() {
     `).join('');
 }
 
-window.selectGeneratedSection = function(id) {
+window.selectGeneratedSection = function (id) {
     activeGeneratedSectionId = id;
     const sec = currentGeneratedSections.find(s => s.section_id === id);
     if (!sec) return;
-    
+
     renderGeneratedSectionsList();
-    
+
     $('generatedViewerTitle').textContent = `${id}. ${sec.name}`;
     $('generatedViewerContent').textContent = typeof sec.content === 'object' ? JSON.stringify(sec.content, null, 2) : sec.content;
     $('deleteGeneratedBtn').style.display = 'block';
-    
+
     // Render formatted preview
     renderSectionPreview(id, sec.content);
     // Show preview tab by default
     switchGeneratedView('preview');
-    
+
     // Attach delete handler
     const delBtn = $('deleteGeneratedBtn');
     const newDelBtn = delBtn.cloneNode(true);
     delBtn.parentNode.replaceChild(newDelBtn, delBtn);
-    
+
     newDelBtn.addEventListener('click', async () => {
         if (!confirm(`Are you sure you want to delete ${sec.name}?`)) return;
         try {
@@ -569,7 +584,7 @@ window.selectGeneratedSection = function(id) {
             if (!res.ok) throw new Error('Failed to delete');
             await loadGeneratedSections();
             showToast(`${sec.name} deleted`, 'success');
-        } catch(e) {
+        } catch (e) {
             showToast(e.message, 'error');
         }
     });
@@ -642,7 +657,7 @@ function renderSection6Preview(deepDives) {
     deepDives.forEach((fw, idx) => {
         const fwName = fw.framework_name || fw.name || `Framework ${idx + 1}`;
         const category = fw.category || '';
-        html += `<div class="preview-card" style="border-left-color: ${['#f97316','#3b82f6','#22c55e','#a855f7','#ef4444','#eab308'][idx % 6]};">`;
+        html += `<div class="preview-card" style="border-left-color: ${['#f97316', '#3b82f6', '#22c55e', '#a855f7', '#ef4444', '#eab308'][idx % 6]};">`;
         html += `<div class="preview-card-title" style="font-size:15px;margin-bottom:14px;">
             ${escapeHtml(fwName)}
             ${category ? `<span class="preview-badge preview-badge-purple">${escapeHtml(category)}</span>` : ''}
@@ -703,10 +718,10 @@ function renderArrayCard(title, value) {
     } else if (typeof value[0] === 'object' && value[0] !== null) {
         value.forEach((item, i) => {
             html += `<div style="border-top:1px solid var(--dark-border);padding-top:10px;margin-top:10px;">`;
-            const itemName = item.name || item.title || item.question || item.framework_name || item.framework || item.technology || `Item ${i+1}`;
+            const itemName = item.name || item.title || item.question || item.framework_name || item.framework || item.technology || `Item ${i + 1}`;
             html += `<div style="font-weight:700;color:var(--orange-400);font-size:13px;margin-bottom:6px;">${escapeHtml(itemName)}</div>`;
             for (const [k, v] of Object.entries(item)) {
-                if (['name','title','framework_name'].includes(k)) continue;
+                if (['name', 'title', 'framework_name'].includes(k)) continue;
                 html += renderField(k, v);
             }
             html += '</div>';
@@ -736,11 +751,11 @@ function renderField(key, value) {
         if (typeof value[0] === 'object') {
             let nested = `<div class="preview-field" style="flex-direction:column;gap:6px;"><div class="preview-field-key">${escapeHtml(fieldTitle)} <span class="preview-badge preview-badge-blue">${value.length}</span></div>`;
             value.forEach((item, i) => {
-                const subName = item.name || item.title || `${i+1}`;
+                const subName = item.name || item.title || `${i + 1}`;
                 nested += `<div style="padding:8px;background:rgba(255,255,255,0.02);border-radius:var(--radius-sm);border:1px solid var(--dark-border);margin-top:4px;">`;
                 nested += `<div style="font-weight:600;font-size:12px;color:var(--orange-400);margin-bottom:4px;">${escapeHtml(subName)}</div>`;
                 for (const [sk, sv] of Object.entries(item)) {
-                    if (['name','title'].includes(sk)) continue;
+                    if (['name', 'title'].includes(sk)) continue;
                     nested += renderField(sk, sv);
                 }
                 nested += '</div>';

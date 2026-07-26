@@ -5,6 +5,14 @@ All notable changes to BuiltByMe will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-07-26
+
+### Added
+
+- **PDF Color Theme Selector** — 6 visual design theme presets (Sunrise, Ocean, Forest, Royal, Midnight, Obsidian) accessible via split-color circular swatches below the "Generate PDF" button in the project sidebar.
+- **Dark Theme Page Fix** — Configured WeasyPrint `@page` background property to fill margin areas, eliminating white borders in dark mode exports (Midnight and Obsidian themes).
+- **User Guide: Extensibility Tutorial** — Detailed Step-by-step developer tutorial in the User Guide Modal explaining how to add custom documentation sections (Section 15+) across Pydantic schemas, radial JS layout, and backend routes.
+
 ## [1.1.0] — 2026-07-14
 
 ### Added

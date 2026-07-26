@@ -772,12 +772,68 @@ def generate_pdf(project_name):
     if not os.path.exists(db_path):
         return jsonify({'error': 'Project not found'}), 404
 
-    # Parse skip/placeholder config from request body (POST) or default to empty
+    # PDF Color Themes
+    PDF_THEMES = {
+        'sunrise': {
+            'bg': '#ffffff', 'text': '#334155', 'h1': '#0f172a', 'h2_bg': '#0f172a', 'h2_text': '#ffffff',
+            'accent': '#f97316', 'border': '#e2e8f0', 'card_bg': '#ffffff', 'card_border': '#cbd5e1',
+            'key_color': '#64748b', 'val_color': '#1e293b', 'pre_bg': '#0f172a', 'pre_text': '#e2e8f0',
+            'code_bg': '#f1f5f9', 'code_text': '#ea580c', 'title_box_bg': '#f8fafc',
+            'badge_bg': '#fff7ed', 'badge_text': '#ea580c', 'badge_border': '#fed7aa',
+            'toc_dots': '#cbd5e1', 'footer': '#9ca3af', 'note_bg': '#f8fafc', 'note_text': '#94a3b8'
+        },
+        'ocean': {
+            'bg': '#ffffff', 'text': '#334155', 'h1': '#1e3a5f', 'h2_bg': '#1e3a5f', 'h2_text': '#ffffff',
+            'accent': '#0ea5e9', 'border': '#e0f2fe', 'card_bg': '#ffffff', 'card_border': '#7dd3fc',
+            'key_color': '#0369a1', 'val_color': '#0c4a6e', 'pre_bg': '#0f172a', 'pre_text': '#e0f2fe',
+            'code_bg': '#f0f9ff', 'code_text': '#0284c7', 'title_box_bg': '#f0f9ff',
+            'badge_bg': '#e0f2fe', 'badge_text': '#0369a1', 'badge_border': '#7dd3fc',
+            'toc_dots': '#7dd3fc', 'footer': '#64748b', 'note_bg': '#f0f9ff', 'note_text': '#0284c7'
+        },
+        'forest': {
+            'bg': '#ffffff', 'text': '#334155', 'h1': '#1a3c34', 'h2_bg': '#1a3c34', 'h2_text': '#ffffff',
+            'accent': '#22c55e', 'border': '#dcfce7', 'card_bg': '#ffffff', 'card_border': '#86efac',
+            'key_color': '#15803d', 'val_color': '#14532d', 'pre_bg': '#052e16', 'pre_text': '#dcfce7',
+            'code_bg': '#f0fdf4', 'code_text': '#16a34a', 'title_box_bg': '#f0fdf4',
+            'badge_bg': '#dcfce7', 'badge_text': '#15803d', 'badge_border': '#86efac',
+            'toc_dots': '#86efac', 'footer': '#64748b', 'note_bg': '#f0fdf4', 'note_text': '#16a34a'
+        },
+        'royal': {
+            'bg': '#ffffff', 'text': '#334155', 'h1': '#2e1065', 'h2_bg': '#2e1065', 'h2_text': '#ffffff',
+            'accent': '#a855f7', 'border': '#f3e8ff', 'card_bg': '#ffffff', 'card_border': '#d8b4fe',
+            'key_color': '#7e22ce', 'val_color': '#3b0764', 'pre_bg': '#1e1b4b', 'pre_text': '#f3e8ff',
+            'code_bg': '#faf5ff', 'code_text': '#9333ea', 'title_box_bg': '#faf5ff',
+            'badge_bg': '#f3e8ff', 'badge_text': '#6b21a8', 'badge_border': '#d8b4fe',
+            'toc_dots': '#d8b4fe', 'footer': '#64748b', 'note_bg': '#faf5ff', 'note_text': '#9333ea'
+        },
+        'midnight': {
+            'bg': '#0f172a', 'text': '#cbd5e1', 'h1': '#f8fafc', 'h2_bg': '#1e293b', 'h2_text': '#f8fafc',
+            'accent': '#f59e0b', 'border': '#334155', 'card_bg': '#1e293b', 'card_border': '#475569',
+            'key_color': '#94a3b8', 'val_color': '#f8fafc', 'pre_bg': '#020617', 'pre_text': '#f8fafc',
+            'code_bg': '#334155', 'code_text': '#fbbf24', 'title_box_bg': '#1e293b',
+            'badge_bg': '#334155', 'badge_text': '#fbbf24', 'badge_border': '#475569',
+            'toc_dots': '#475569', 'footer': '#64748b', 'note_bg': '#1e293b', 'note_text': '#94a3b8'
+        },
+        'obsidian': {
+            'bg': '#18181b', 'text': '#d4d4d8', 'h1': '#fafafa', 'h2_bg': '#27272a', 'h2_text': '#fafafa',
+            'accent': '#f43f5e', 'border': '#3f3f46', 'card_bg': '#27272a', 'card_border': '#52525b',
+            'key_color': '#a1a1aa', 'val_color': '#fafafa', 'pre_bg': '#09090b', 'pre_text': '#fafafa',
+            'code_bg': '#3f3f46', 'code_text': '#fb7185', 'title_box_bg': '#27272a',
+            'badge_bg': '#3f3f46', 'badge_text': '#fb7185', 'badge_border': '#52525b',
+            'toc_dots': '#52525b', 'footer': '#71717a', 'note_bg': '#27272a', 'note_text': '#a1a1aa'
+        }
+    }
+
+    # Parse skip/placeholder/theme config from request body (POST) or default to empty
     skip_sections = []
     placeholder_sections = []
+    theme_name = 'sunrise'
     if request.method == 'POST' and request.json:
         skip_sections = request.json.get('skip_sections', [])
         placeholder_sections = request.json.get('placeholder_sections', [])
+        theme_name = request.json.get('theme', 'sunrise')
+
+    t = PDF_THEMES.get(theme_name, PDF_THEMES['sunrise'])
 
     db = ProjectDB(db_path)
     try:
@@ -791,36 +847,36 @@ def generate_pdf(project_name):
         <head>
             <meta charset="utf-8">
             <style>
-                @page {{ size: A4; margin: 18mm; @bottom-center {{ content: counter(page); font-family: -apple-system, sans-serif; font-size: 9pt; color: #9ca3af; }} }}
-                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.7; font-size: 10.5pt; }}
-                h1 {{ color: #0f172a; font-size: 28pt; border-bottom: 3px solid #f97316; padding-bottom: 12px; margin-top: 0; font-weight: 800; }}
-                h2 {{ color: #ffffff; background-color: #0f172a; font-size: 20pt; margin-top: 40px; page-break-before: always; padding: 16px 24px; border-radius: 8px; border-left: 6px solid #f97316; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }}
-                h3 {{ color: #f97316; font-size: 15pt; margin-top: 24px; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }}
-                h4 {{ color: #334155; font-size: 13pt; margin-top: 16px; margin-bottom: 10px; font-weight: 600; }}
-                h5 {{ color: #0f172a; font-size: 11.5pt; margin-top: 12px; margin-bottom: 8px; font-weight: 600; }}
+                @page {{ size: A4; margin: 18mm; background: {t['bg']}; @bottom-center {{ content: counter(page); font-family: -apple-system, sans-serif; font-size: 9pt; color: {t['footer']}; }} }}
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: {t['text']}; line-height: 1.7; font-size: 10.5pt; background-color: {t['bg']}; }}
+                h1 {{ color: {t['h1']}; font-size: 28pt; border-bottom: 3px solid {t['accent']}; padding-bottom: 12px; margin-top: 0; font-weight: 800; }}
+                h2 {{ color: {t['h2_text']}; background-color: {t['h2_bg']}; font-size: 20pt; margin-top: 40px; page-break-before: always; padding: 16px 24px; border-radius: 8px; border-left: 6px solid {t['accent']}; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }}
+                h3 {{ color: {t['accent']}; font-size: 15pt; margin-top: 24px; margin-bottom: 12px; border-bottom: 1px solid {t['border']}; padding-bottom: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }}
+                h4 {{ color: {t['text']}; font-size: 13pt; margin-top: 16px; margin-bottom: 10px; font-weight: 600; }}
+                h5 {{ color: {t['h1']}; font-size: 11.5pt; margin-top: 12px; margin-bottom: 8px; font-weight: 600; }}
                 
                 .title-page {{ height: 85vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; page-break-after: always; }}
-                .title-page-inner {{ background: #f8fafc; padding: 40px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); width: 80%; margin: 0 auto; }}
-                .title-page h1 {{ border: none; font-size: 42pt; margin-bottom: 16px; color: #0f172a; text-align: center; }}
-                .title-page p {{ font-size: 16pt; color: #64748b; margin-top: 0; }}
-                .title-page .badge {{ display: inline-block; background: #fff7ed; color: #ea580c; padding: 8px 16px; border-radius: 999px; font-size: 12pt; font-weight: 600; border: 1px solid #fed7aa; margin-top: 24px; }}
+                .title-page-inner {{ background: {t['title_box_bg']}; padding: 40px; border-radius: 16px; border: 1px solid {t['border']}; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); width: 80%; margin: 0 auto; }}
+                .title-page h1 {{ border: none; font-size: 42pt; margin-bottom: 16px; color: {t['h1']}; text-align: center; }}
+                .title-page p {{ font-size: 16pt; color: {t['key_color']}; margin-top: 0; }}
+                .title-page .badge {{ display: inline-block; background: {t['badge_bg']}; color: {t['badge_text']}; padding: 8px 16px; border-radius: 999px; font-size: 12pt; font-weight: 600; border: 1px solid {t['badge_border']}; margin-top: 24px; }}
                 
-                pre {{ background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9pt; border: 1px solid #1e293b; white-space: pre-wrap; word-break: break-word; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); line-height: 1.5; }}
-                code {{ background: #f1f5f9; color: #ea580c; padding: 3px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9pt; font-weight: 500; border: 1px solid #e2e8f0; }}
+                pre {{ background: {t['pre_bg']}; color: {t['pre_text']}; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9pt; border: 1px solid {t['border']}; white-space: pre-wrap; word-break: break-word; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); line-height: 1.5; }}
+                code {{ background: {t['code_bg']}; color: {t['code_text']}; padding: 3px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9pt; font-weight: 500; border: 1px solid {t['border']}; }}
                 pre code {{ background: transparent; color: inherit; padding: 0; border: none; }}
                 
-                ul {{ margin-top: 8px; margin-bottom: 16px; padding-left: 24px; color: #475569; }}
+                ul {{ margin-top: 8px; margin-bottom: 16px; padding-left: 24px; color: {t['text']}; }}
                 li {{ margin-bottom: 8px; }}
-                li::marker {{ color: #f97316; }}
+                li::marker {{ color: {t['accent']}; }}
                 
-                .item-card {{ background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); display: table; width: 100%; box-sizing: border-box; page-break-inside: avoid; border-left: 4px solid #cbd5e1; }}
+                .item-card {{ background: {t['card_bg']}; border: 1px solid {t['card_border']}; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); display: table; width: 100%; box-sizing: border-box; page-break-inside: avoid; border-left: 4px solid {t['accent']}; }}
                 .item-row {{ display: table-row; }}
-                .item-key {{ font-weight: 600; color: #64748b; display: table-cell; width: 22%; padding-right: 16px; padding-bottom: 12px; vertical-align: top; word-break: break-word; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.5px; }}
-                .item-val {{ display: table-cell; width: 78%; padding-bottom: 12px; vertical-align: top; font-size: 10.5pt; color: #1e293b; }}
+                .item-key {{ font-weight: 600; color: {t['key_color']}; display: table-cell; width: 22%; padding-right: 16px; padding-bottom: 12px; vertical-align: top; word-break: break-word; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.5px; }}
+                .item-val {{ display: table-cell; width: 78%; padding-bottom: 12px; vertical-align: top; font-size: 10.5pt; color: {t['val_color']}; }}
                 .item-row:last-child .item-key, .item-row:last-child .item-val {{ padding-bottom: 0; }}
                 
                 p {{ margin-top: 0; margin-bottom: 16px; }}
-                .placeholder-note {{ color: #94a3b8; font-style: italic; padding: 24px; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1; text-align: center; margin-top: 20px; }}
+                .placeholder-note {{ color: {t['note_text']}; font-style: italic; padding: 24px; background: {t['note_bg']}; border-radius: 8px; border: 1px dashed {t['card_border']}; text-align: center; margin-top: 20px; }}
                 
                 /* Badges */
                 .badge-green {{ background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 8.5pt; font-weight: 700; border: 1px solid #bbf7d0; display: inline-block; }}
@@ -853,7 +909,7 @@ def generate_pdf(project_name):
         # Build TOC
         for s in sections:
             if s['section_id'] not in skip_sections:
-                html_content += f"<li style='margin-bottom: 12px; font-size: 12pt; border-bottom: 1px dotted #cbd5e1; padding-bottom: 4px;'><strong style='color: #f97316;'>Section {s['section_id']}:</strong> {str(s['name'])}</li>\n"
+                html_content += f"<li style='margin-bottom: 12px; font-size: 12pt; border-bottom: 1px dotted {t['toc_dots']}; padding-bottom: 4px;'><strong style='color: {t['accent']};'>Section {s['section_id']}:</strong> {str(s['name'])}</li>\n"
         html_content += "</ul>\n"
         
         for s in sections:
