@@ -790,6 +790,7 @@ document.addEventListener('keydown', (e) => {
     // Escape — close any open modal/overlay
     if (e.key === 'Escape') {
         e.preventDefault();
+        if ($('customSectionCreateModal')?.style.display !== 'none' && $('customSectionCreateModal')?.style.display) { $('customSectionCreateModal').style.display = 'none'; return; }
         if ($('userGuideOverlay')?.style.display !== 'none' && $('userGuideOverlay')?.style.display) { $('userGuideOverlay').style.display = 'none'; document.body.style.overflow = ''; return; }
         if ($('generatedOverlay')?.style.display !== 'none' && $('generatedOverlay')?.style.display) { $('generatedOverlay').style.display = 'none'; document.body.style.overflow = ''; return; }
         if ($('contentViewer')?.style.display !== 'none' && $('contentViewer')?.style.display) { closeContentViewer(); return; }
@@ -807,3 +808,186 @@ document.addEventListener('keydown', (e) => {
         case 'm': e.preventDefault(); if (currentProject && $('exportMarkdownBtn')) $('exportMarkdownBtn').click(); break;
     }
 });
+
+// ===== Custom Sections Feature (Configuration Modal & Radial Integration) =====
+(function initCustomSections() {
+    const modal = $('customSectionCreateModal');
+    const closeBtn = $('customModalClose');
+    const menuBtn = $('customSectionsBtn');
+    const submitBtn = $('customModalSubmitBtn');
+    const titleInput = $('customModalTitle');
+    const descInput = $('customModalDesc');
+
+    if (menuBtn && modal) {
+        menuBtn.addEventListener('click', () => {
+            if (!currentProject) {
+                showToast('Please select a project first.', 'warning');
+                return;
+            }
+            if (menuDropdown) menuDropdown.classList.remove('show');
+            modal.style.display = 'flex';
+            if (titleInput) { titleInput.value = ''; titleInput.focus(); }
+            if (descInput) { descInput.value = ''; }
+        });
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                modal.style.display = 'none';
+            });
+        }
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    }
+
+    if (submitBtn) {
+        submitBtn.addEventListener('click', async () => {
+            if (!currentProject) return;
+            const title = titleInput?.value.trim();
+            const desc = descInput?.value.trim();
+            if (!title) {
+                showToast('Please enter a custom section title.', 'warning');
+                if (titleInput) titleInput.focus();
+                return;
+            }
+            if (!desc) {
+                showToast('Please provide instructions/description for this section.', 'warning');
+                if (descInput) descInput.focus();
+                return;
+            }
+
+            submitBtn.disabled = true;
+            try {
+                const res = await fetch(`/api/project/${currentProject}/custom_section_def`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ section_title: title, section_description: desc })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to create custom section definition.');
+
+                showToast(`Custom Section "${title}" added to Radial Generator!`, 'success');
+                modal.style.display = 'none';
+
+                if (window.initGeneratorForProject) {
+                    await window.initGeneratorForProject(currentProject);
+                }
+            } catch (e) {
+                showToast(e.message, 'error');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    }
+
+    // === Radial Generator Panel: Custom Action Buttons ===
+    const copyPromptBtn = $('genCopyPromptBtn');
+    const showPasteBtn = $('genShowPasteBtn');
+    const deleteCustomBtn = $('genDeleteCustomBtn');
+    const submitPasteBtn = $('genSubmitPasteBtn');
+    const pasteInput = $('genPasteInput');
+    const pasteArea = $('genPasteArea');
+
+    if (copyPromptBtn) {
+        copyPromptBtn.addEventListener('click', async () => {
+            if (!currentProject || !window.activeSection) return;
+            const secTitleEl = $('genPanelTitle');
+            const secDescEl = $('genPanelSubtitle');
+            const title = secTitleEl ? secTitleEl.textContent.replace(/^\d+\.\s*/, '').trim() : `Custom Section`;
+            const desc = secDescEl ? secDescEl.textContent.trim() : '';
+
+            copyPromptBtn.disabled = true;
+            try {
+                const res = await fetch(`/api/project/${currentProject}/custom_prompt`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ section_title: title, section_description: desc })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to generate prompt');
+
+                await navigator.clipboard.writeText(data.prompt);
+                showToast('Prompt copied to clipboard! Paste into ChatGPT, Claude, etc.', 'success');
+            } catch (e) {
+                showToast(e.message, 'error');
+            } finally {
+                copyPromptBtn.disabled = false;
+            }
+        });
+    }
+
+    if (showPasteBtn && pasteArea) {
+        showPasteBtn.addEventListener('click', () => {
+            if (pasteArea.style.display === 'none' || !pasteArea.style.display) {
+                pasteArea.style.display = 'flex';
+                if (pasteInput) { pasteInput.value = ''; pasteInput.focus(); }
+            } else {
+                pasteArea.style.display = 'none';
+            }
+        });
+    }
+
+    if (submitPasteBtn && pasteInput) {
+        submitPasteBtn.addEventListener('click', async () => {
+            if (!currentProject || !window.activeSection) return;
+            const content = pasteInput.value.trim();
+            if (!content) {
+                showToast('Please paste the AI response JSON.', 'warning');
+                pasteInput.focus();
+                return;
+            }
+
+            const secTitleEl = $('genPanelTitle');
+            const title = secTitleEl ? secTitleEl.textContent.replace(/^\d+\.\s*/, '').trim() : `Custom ${window.activeSection}`;
+
+            submitPasteBtn.disabled = true;
+            try {
+                const res = await fetch(`/api/project/${currentProject}/add_custom_manual`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ section_title: title, content: content, section_id: window.activeSection })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to save section');
+
+                showToast(`Section saved successfully!`, 'success');
+                if (pasteArea) pasteArea.style.display = 'none';
+                if (window.initGeneratorForProject) {
+                    await window.initGeneratorForProject(currentProject);
+                }
+            } catch (e) {
+                showToast(e.message, 'error');
+            } finally {
+                submitPasteBtn.disabled = false;
+            }
+        });
+    }
+
+    if (deleteCustomBtn) {
+        deleteCustomBtn.addEventListener('click', async () => {
+            if (!currentProject || !window.activeSection) return;
+            if (!confirm('Are you sure you want to completely remove this custom section?')) return;
+
+            deleteCustomBtn.disabled = true;
+            try {
+                const delDefRes = await fetch(`/api/project/${currentProject}/custom_section_def/${window.activeSection}`, { method: 'DELETE' });
+                await fetch(`/api/project/${currentProject}/generated/${window.activeSection}`, { method: 'DELETE' }).catch(()=>{});
+
+                if (!delDefRes.ok && delDefRes.status !== 404) throw new Error('Failed to delete section');
+                showToast('Custom section deleted.', 'success');
+                
+                if (window.initGeneratorForProject) {
+                    await window.initGeneratorForProject(currentProject);
+                }
+            } catch (e) {
+                showToast(e.message, 'error');
+            } finally {
+                deleteCustomBtn.disabled = false;
+            }
+        });
+    }
+})();
+

@@ -116,6 +116,25 @@
                                 </svg>
                                 User Guide
                             </div>
+                            <div class="menu-item" id="githubRepoBtn" onclick="window.open('https://github.com/A-Square8/BuiltByMe', '_blank')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path
+                                        d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+                                </svg>
+                                GitHub Repository
+                            </div>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-section">
+                            <div class="menu-section-title">Tools</div>
+                            <div class="menu-item" id="customSectionsBtn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                                </svg>
+                                Custom Sections
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -413,6 +432,36 @@
                                         <polygon points="5 3 19 12 5 21 5 3" />
                                     </svg>
                                     Generate This Section Only
+                                </button>
+                            </div>
+                            <div id="genCustomActions" style="display:none; flex-direction:column; gap:10px; margin-top:16px; border-top: 1px solid var(--dark-border); padding-top: 16px;">
+                                <div style="font-size:11px; font-weight:700; color:var(--orange-400); text-transform:uppercase; letter-spacing:0.5px;">Custom Section Actions</div>
+                                <button class="gen-btn gen-btn-secondary" id="genCopyPromptBtn" style="width: 100%; border-color: rgba(249,115,22,0.3); color: var(--orange-400);">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                    </svg>
+                                    Copy Prompt for External AI
+                                </button>
+                                <button class="gen-btn gen-btn-secondary" id="genShowPasteBtn" style="width: 100%;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                                    </svg>
+                                    Paste External AI Response
+                                </button>
+                                <div id="genPasteArea" style="display:none; flex-direction:column; gap:8px; margin-top:4px;">
+                                    <textarea class="gen-textarea" id="genPasteInput" rows="5" style="font-family: var(--font-mono); font-size: 11px;" placeholder="Paste external LLM JSON response here..."></textarea>
+                                    <button class="gen-btn gen-btn-primary" id="genSubmitPasteBtn" style="width: 100%; padding: 8px; font-size: 12px;">
+                                        Save Response
+                                    </button>
+                                </div>
+                                <button class="gen-btn" id="genDeleteCustomBtn" style="width: 100%; margin-top: 8px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #f87171;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="3 6 5 6 21 6" />
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                    </svg>
+                                    Delete Custom Section
                                 </button>
                             </div>
                         </div>
@@ -940,58 +989,35 @@
 
                 <h3
                     style="color: var(--white); font-size: 20px; margin-bottom: 16px; font-family: var(--font-sans); border-top: 1px solid var(--dark-border); padding-top: 32px;">
-                    12. How to Add a New Custom Section (Section 15+)</h3>
-                <p>BuiltByMe's architecture makes it straightforward to add entirely new, custom documentation sections beyond the 14 standard ones. Adding a new section requires changes across <strong>3 core files</strong>:</p>
-                
-                <h4 style="color: var(--orange, #f97316); font-size: 16px; margin: 20px 0 10px 0; font-weight: 600;">Step 1: Define Schema & Prompt (<code>extraction/prompts.py</code>)</h4>
-                <p>Each section relies on a Pydantic schema for structured LLM JSON output and a system prompt guiding the analysis. Add your Pydantic class and system prompt at the bottom of the file, then register them in the dictionaries:</p>
-                <div style="position: relative;">
-                    <pre style="background: #0d0d10; border: 1px solid var(--dark-border); padding: 16px; border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 13px; color: #a1a1aa; white-space: pre-wrap; margin-bottom: 24px; overflow-x: auto;">from pydantic import BaseModel, Field
+                    12. Adding Custom Sections (via UI)</h3>
+                <p>BuiltByMe lets you create unlimited custom documentation sections directly from the interface — no code changes required. Here's how:</p>
 
-# 1. Define the Pydantic Schema (Field descriptions are mandatory for LLM routing)
-class Section15CustomTopic(BaseModel):
-    title: str = Field(..., description="A clear title for the specialized topic.")
-    key_findings: List[str] = Field(..., description="List of key patterns identified in the code.")
-    analysis_summary: str = Field(..., description="Detailed conversational analysis of the domain.")
+                <h4 style="color: var(--orange, #f97316); font-size: 16px; margin: 20px 0 10px 0; font-weight: 600;">Step 1: Open the Custom Sections Tool</h4>
+                <p>Click the <strong>⋮ menu</strong> (three dots) in the top-right header, then select <strong>Custom Sections</strong> under the <strong>Tools</strong> category. This opens the "Add Custom Section" modal.</p>
 
-# 2. Write the System Prompt
-SECTION_15_SYSTEM_PROMPT = """You are a senior principal software engineer analyzing a codebase.
-Your goal is to extract architectural insights for our custom documentation section.
+                <h4 style="color: var(--orange, #f97316); font-size: 16px; margin: 20px 0 10px 0; font-weight: 600;">Step 2: Define Your Section</h4>
+                <ul style="margin-bottom: 16px; list-style-type: disc; padding-left: 20px;">
+                    <li><strong>Section Title:</strong> Give your section a clear name (e.g., "Security Audit", "Error Handling Patterns", "Natural Pitch").</li>
+                    <li><strong>Description / Instructions:</strong> Describe what the section should cover and any tone or focus instructions. This becomes the AI prompt context when generating.</li>
+                </ul>
+                <p>Click <strong>Add to Radial Generator</strong> to create the section.</p>
 
-# Instructions
-1. Analyze the codebase context provided and identify key structural findings.
-2. Provide concise, opinionated analysis written in conversational first-person English.
-"""
+                <h4 style="color: var(--orange, #f97316); font-size: 16px; margin: 20px 0 10px 0; font-weight: 600;">Step 3: Find Your New Node</h4>
+                <p>A <strong>glowing cyan node</strong> will appear in the radial generator circle alongside the standard 14 sections. Custom nodes are visually distinct with a neon-cyan glow so you can identify them instantly. Click it to open the inspector panel.</p>
 
-# 3. Register in the lookup dictionaries at the end of extraction/prompts.py
-SECTION_SCHEMAS[15] = Section15CustomTopic
-SECTION_PROMPTS[15] = SECTION_15_SYSTEM_PROMPT</pre>
-                </div>
+                <h4 style="color: var(--orange, #f97316); font-size: 16px; margin: 20px 0 10px 0; font-weight: 600;">Step 4: Generate Content</h4>
+                <p>Custom sections support two generation workflows:</p>
+                <ul style="margin-bottom: 16px; list-style-type: disc; padding-left: 20px;">
+                    <li><strong>Direct AI Generation:</strong> Select an API provider & key, then click <strong>Generate This Section Only</strong>. The AI will analyze your codebase using the instructions you provided.</li>
+                    <li><strong>External AI (Copy & Paste):</strong> Click <strong>Copy Prompt for External AI</strong> to get a ready-made prompt. Paste it into ChatGPT, Claude, or any AI tool. Then click <strong>Paste External AI Response</strong> to save the result back.</li>
+                </ul>
 
-                <h4 style="color: var(--orange, #f97316); font-size: 16px; margin: 20px 0 10px 0; font-weight: 600;">Step 2: Register in Frontend Radial Generator (<code>ui/generator.js</code>)</h4>
-                <p>Open <code>ui/generator.js</code> and append your new section to the <code>SECTIONS</code> metadata array and assign an SVG icon in <code>NODE_ICONS</code>. The radial geometry formula will automatically scale to 15+ nodes uniformly around the circle:</p>
-                <div style="position: relative;">
-                    <pre style="background: #0d0d10; border: 1px solid var(--dark-border); padding: 16px; border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 13px; color: #a1a1aa; white-space: pre-wrap; margin-bottom: 24px; overflow-x: auto;">// In SECTIONS array at the top of generator.js:
-{ id: 15, name: 'Custom Topic Analysis', short: 'Custom Topic', desc: 'Analyzes specialized domain patterns and custom architecture.' },
-
-// In NODE_ICONS dictionary:
-15: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>',</pre>
-                </div>
-
-                <h4 style="color: var(--orange, #f97316); font-size: 16px; margin: 20px 0 10px 0; font-weight: 600;">Step 3: Register in Backend Route Handlers (<code>main.py</code>)</h4>
-                <p>Import your schema in <code>main.py</code> and add ID <code>15</code> to the section name mapping tables inside the generate routes:</p>
-                <div style="position: relative;">
-                    <pre style="background: #0d0d10; border: 1px solid var(--dark-border); padding: 16px; border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 13px; color: #a1a1aa; white-space: pre-wrap; margin-bottom: 24px; overflow-x: auto;"># 1. Add import at the top of main.py
-from extraction.prompts import Section15CustomTopic
-
-# 2. Add to section_names_map and section_names inside generate_section()
-section_names_map = {
-    ...,
-    15: 'Custom Topic Analysis'
-}</pre>
-                </div>
-                <p style="margin-bottom: 32px;"><em>Note on Export Formatting:</em> BuiltByMe's PDF and Markdown generators dynamically render any dictionary or list structure saved in SQLite. If your schema includes specialized nested objects that require custom HTML styling (like colored badges or custom tables), add a rendering handler for <code>s_id == 15</code> inside the <code>generate_pdf</code> and Markdown formatting loops in <code>main.py</code>.</p>
-
+                <h4 style="color: var(--orange, #f97316); font-size: 16px; margin: 20px 0 10px 0; font-weight: 600;">Step 5: Manage Custom Sections</h4>
+                <ul style="margin-bottom: 32px; list-style-type: disc; padding-left: 20px;">
+                    <li><strong>Delete:</strong> Click the custom node, then use the <strong>Delete Custom Section</strong> button in the panel to remove it.</li>
+                    <li><strong>Skip / Placeholder:</strong> Toggle these in the inspector panel, just like standard sections.</li>
+                    <li><strong>PDF & Markdown:</strong> Custom sections are automatically included in PDF and Markdown exports alongside the 14 standard sections.</li>
+                </ul>
                 <h3
                     style="color: var(--white); font-size: 20px; margin-bottom: 16px; font-family: var(--font-sans); border-top: 1px solid var(--dark-border); padding-top: 32px;">
                     13. Customizing the PDF Template</h3>
@@ -1057,6 +1083,59 @@ section_names_map = {
                         <div class="shortcut-keys"><span class="shortcut-key">Esc</span></div>
                         <span class="shortcut-label">Close Modal / Overlay</span>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOM SECTIONS CREATION MODAL (Configuration-style) -->
+    <div class="modal-overlay" id="customSectionCreateModal" style="display:none;">
+        <div class="modal" style="max-width: 540px;">
+            <div class="modal-header">
+                <h3>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--orange-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                    </svg>
+                    Add Custom Section
+                </h3>
+                <button class="modal-close" id="customModalClose">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="config-description">
+                    Create a specialized documentation section tailored to your project. Once added, a glowing cyan custom node will appear in the circular radial generator menu where you can generate it directly with AI or via external tools.
+                </p>
+                <div class="form-group">
+                    <label for="customModalTitle">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                        Section Title
+                    </label>
+                    <input type="text" id="customModalTitle" placeholder="e.g., Natural Pitch, Error Handling Patterns, Security Audit">
+                </div>
+                <div class="form-group" style="margin-top: 16px;">
+                    <label for="customModalDesc">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1" />
+                        </svg>
+                        What should this section cover?
+                    </label>
+                    <textarea id="customModalDesc" rows="4" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--dark-border2); border-radius: var(--radius-sm); padding: 10px; color: #fff; font-family: var(--font-sans); font-size: 13px; line-height: 1.5; outline: none;" placeholder="Describe what you want this section to cover and any tone or focus instructions..."></textarea>
+                </div>
+                <div class="form-actions" style="margin-top: 24px;">
+                    <button class="btn btn-primary" id="customModalSubmitBtn" style="width: 100%; justify-content: center;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                        Add to Radial Generator
+                    </button>
                 </div>
             </div>
         </div>

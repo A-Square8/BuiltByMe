@@ -5,6 +5,21 @@ All notable changes to BuiltByMe will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-08-01
+
+### Added
+
+- **Custom Sections (UI)** — Create unlimited custom documentation sections directly from the interface via **⋮ menu → Custom Sections**. No code changes required. Custom nodes appear on the radial generator with a distinctive neon-cyan glow. Supports both direct AI generation and external AI copy/paste workflow.
+- **GitHub Repository Link** — Added a "GitHub Repository" button in the **⋮ menu → Settings** section that opens the project's GitHub repo in a new tab.
+
+### Changed
+
+- **Toast Notification Positioning** — Moved toast notifications from the top-right corner to top-center of the screen to avoid overlapping with header buttons (theme toggle, menu). Animations updated to slide from top instead of from right.
+- **User Guide: Custom Sections** — Section 12 of the in-app User Guide now documents the UI-based custom sections workflow (5-step guide) instead of the previous code-level developer instructions.
+- **Documentation Updates** — Updated README.md, CHANGELOG.md, CONTRIBUTING.md, docs/ARCHITECTURE.md, and docs/API.md to reflect the Custom Sections UI feature.
+
+---
+
 ## [1.2.0] — 2026-07-26
 
 ### Added

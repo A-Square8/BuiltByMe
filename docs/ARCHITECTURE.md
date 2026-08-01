@@ -7,48 +7,88 @@ This document provides a comprehensive technical overview of BuiltByMe's archite
 BuiltByMe is a **Flask-based web application** that combines local AST parsing with remote LLM analysis to generate structured technical documentation from GitHub repositories.
 
 ```mermaid
-graph TD
-    classDef ui fill:#2b6cb0,stroke:#2c5282,stroke-width:2px,color:#fff;
-    classDef server fill:#2f855a,stroke:#276749,stroke-width:2px,color:#fff;
-    classDef extraction fill:#805ad5,stroke:#553c9a,stroke-width:2px,color:#fff;
-    
-    subgraph Client [Browser Client]
-        AppJS[app.js\nProjects, Viewer]:::ui
-        GenJS[generator.js\nRadial UI, Gen]:::ui
-        Style[style.css]:::ui
-        HTML[index.html\nSPA Shell]:::ui
+flowchart TD
+    classDef ui fill:#1e3a5f,stroke:#60a5fa,stroke-width:2px,color:#dbeafe
+    classDef api fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f0fdf4
+    classDef core fill:#3b0764,stroke:#c084fc,stroke-width:2px,color:#f3e8ff
+    classDef data fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#fefce8
+    classDef svc fill:#1e1b4b,stroke:#818cf8,stroke-width:1.5px,color:#e0e7ff
+    classDef output fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fef2f2
+
+    subgraph CLIENT ["Browser Client — Vanilla HTML/CSS/JS"]
+        HTML["index.html\nSPA Shell · Modals · User Guide"]:::ui
+        APPJS["app.js\nProject CRUD · Config · Content Viewer\nGenerated Output · Theme · Shortcuts"]:::ui
+        GENJS["generator.js\nRadial Nodes · Section Settings\nBatch Gen · Terminal Logger"]:::ui
+        CSS["style.css\nDesign Tokens · Light/Dark Theme\nToast System · Responsive"]:::ui
+        GCSS["generator.css\nRadial Layout · Custom Nodes\nPanel · Terminal Styles"]:::ui
     end
 
-    subgraph Server [Flask Server]
-        API[API Routes\n/api/*]:::server
-        PDF[PDF Generator\nWeasyPrint]:::server
-        MD[Markdown Exporter]:::server
-        Key[Key Management\nFernet]:::server
+    subgraph SERVER ["Flask Application — main.py"]
+        REST["REST API Router\n30+ Endpoints"]:::api
+        KEYS["Key Management\nFernet AES Encryption"]:::api
+        PDFENG["PDF Generator\nWeasyPrint · 6 Color Themes\nMermaid.ink Diagrams"]:::api
+        MDENG["Markdown Exporter\nStructured .md with TOC"]:::api
+        CUSTOM["Custom Sections Engine\nDefinitions · AI Gen · Manual Paste\nPrompt Builder"]:::api
     end
 
-    subgraph Core [Extraction Package]
-        Pipe[pipeline.py]:::extraction
-        Fetch[github_fetcher.py]:::extraction
-        Ext[extractors.py]:::extraction
-        DB[database.py\nSQLite]:::extraction
-        LLM[llm_gateway.py\nLangChain]:::extraction
-        TS[ts_parser.py]:::extraction
-        Prompt[prompts.py]:::extraction
+    subgraph EXTRACTION ["Extraction Package — extraction/"]
+        PIPELINE["pipeline.py\nOrchestration · Progress Callback\nBackground Thread"]:::core
+        GHFETCH["github_fetcher.py\nREST v3 · File Tree\nContent Download · Commits"]:::core
+        EXTRACT["extractors.py\n12 Language Extractors\nGeneric Fallback"]:::core
+        TSPARSE["ts_parser.py\nTree-sitter Init\nLanguage Registry"]:::core
+        LANGDET["language_detector.py\nExtension Mapping"]:::core
+        FILTER["file_filter.py\nGlob Skip Rules"]:::core
+        GATEWAY["llm_gateway.py\nLangChain Wrapper\nStructured Output"]:::core
+        SCHEMAS["prompts.py\n14 Pydantic Schemas\n14 System Prompts"]:::core
+        DATABASE["database.py\nProjectDB Class\nSQLite ORM"]:::core
     end
-    
-    Client -->|HTTP REST| Server
-    API --> PDF
-    API --> MD
-    API --> Key
-    API --> Pipe
-    API --> LLM
-    
-    Pipe --> Fetch
-    Pipe --> Ext
-    Pipe --> DB
-    Ext --> TS
-    LLM --> Prompt
-    LLM --> DB
+
+    subgraph EXTERNAL ["External Services"]
+        GITHUB{{"GitHub REST API\nv3 · 5000 req/hr w/ PAT"}}:::svc
+        GROQ{{"Groq\nLlama 3.1 8B"}}:::svc
+        GEMINI{{"Gemini\n2.5 Flash"}}:::svc
+        NVIDIA{{"Nvidia NIM\nStepFun 3.5"}}:::svc
+    end
+
+    SQLITE[("SQLite — project.db\nrepo_info · files · code_blocks\ncommits · generated_sections\ncustom_section_defs")]:::data
+    CONFIG[("config.json\nEncrypted Keys · PAT")]:::data
+
+    %% Browser → Server
+    CLIENT -->|"fetch() HTTP REST"| SERVER
+
+    %% API routing
+    REST --> KEYS
+    REST --> PDFENG
+    REST --> MDENG
+    REST --> CUSTOM
+    REST --> PIPELINE
+    REST --> GATEWAY
+
+    %% Extraction flow
+    PIPELINE --> GHFETCH
+    PIPELINE --> EXTRACT
+    PIPELINE --> FILTER
+    EXTRACT --> TSPARSE
+    TSPARSE --> LANGDET
+    GHFETCH -->|"Clone · File Tree · Commits"| GITHUB
+    EXTRACT -->|"AST Metadata + Code Blocks"| DATABASE
+
+    %% LLM flow
+    GATEWAY --> SCHEMAS
+    GATEWAY -->|"1-Pass or 2-Pass Prompts"| GROQ
+    GATEWAY -->|"1-Pass or 2-Pass Prompts"| GEMINI
+    GATEWAY -->|"PydanticOutputParser"| NVIDIA
+    GROQ -->|"Structured JSON"| GATEWAY
+    GEMINI -->|"Structured JSON"| GATEWAY
+    NVIDIA -->|"Structured JSON"| GATEWAY
+    GATEWAY -->|"Save Generated Content"| DATABASE
+
+    %% Storage
+    DATABASE --> SQLITE
+    KEYS --> CONFIG
+    PDFENG -->|"Read All Sections"| DATABASE
+    MDENG -->|"Read All Sections"| DATABASE
+    CUSTOM -->|"Read/Write Custom Defs"| DATABASE
 ```
 
 ---
@@ -119,7 +159,7 @@ result = generate_content(
 
 ### 5. Prompts & Schemas (`extraction/prompts.py`)
 
-Contains 14 Pydantic `BaseModel` classes (one per documentation section) and 14 corresponding system prompts. Examples:
+Contains 14 Pydantic `BaseModel` classes (one per documentation section) and 14 corresponding system prompts. Custom sections (ID ≥ 100) created via the UI use a generic `CustomSectionOutput` schema with dynamic prompts based on user-provided instructions. Examples:
 
 | Section | Schema Class | Key Fields |
 |---|---|---|
@@ -224,9 +264,10 @@ The frontend is a single-page application built with vanilla HTML/CSS/JS (no fra
 
 - `currentProject` - Active project name (global in `app.js`)
 - `sectionStates` - Per-section UI state: skip, placeholder, locked, etc. (in `generator.js`)
+- `customSections` - Array of user-defined custom sections (title, description, ID ≥ 100) stored per-project in SQLite and rendered as neon-cyan radial nodes (in `app.js` / `generator.js`)
 - `currentGeneratedSections` - Cached list of generated sections (in `app.js`)
 - `theme` - Light/dark mode preference persisted via `localStorage`
-- `toast` - Transient notification state managed via DOM appending/removing
+- `toast` - Transient notification state managed via DOM appending/removing (top-center positioned)
 
 ### Communication
 

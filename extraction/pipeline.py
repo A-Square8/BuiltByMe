@@ -116,7 +116,7 @@ class ExtractionPipeline:
             if self.db:
                 try:
                     self.db.fail_extraction(log_id, str(e))
-                except:
+                except Exception:
                     pass
             return {'success': False, 'error': str(e)}
         finally:

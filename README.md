@@ -10,7 +10,7 @@
 [![LangChain](https://img.shields.io/badge/LangChain-0.2+-1C3C3C.svg)](https://www.langchain.com/)
 [![Tree-sitter](https://img.shields.io/badge/Tree--sitter-0.24-6B9F41.svg)](https://tree-sitter.github.io/)
 
-*Turn any GitHub repository into a 14-section technical report and interview guide — powered by Tree-sitter AST parsing and LLMs.*
+*Turn any GitHub repository into a comprehensive technical report and interview guide — with 14 built-in sections plus unlimited custom sections — powered by Tree-sitter AST parsing and LLMs.*
 
 </div>
 
@@ -22,7 +22,7 @@ BuiltByMe bridges the gap between raw source code and high-level architectural u
 
 1. **Extract** - Clone the repo via GitHub API, parse every file's AST using Tree-sitter, and store structured metadata (imports, classes, functions, methods) in a local SQLite database.
 2. **Analyze** - Send intelligent, targeted code chunks to your choice of LLM (Groq, Gemini, Nvidia) to generate structured, schema-validated documentation.
-3. **Generate** - Produce a beautiful, print-ready PDF or Markdown file with 14 documentation sections ranging from architecture diagrams to interview question banks.
+3. **Generate** - Produce a beautiful, print-ready PDF or Markdown file with 14 built-in documentation sections plus unlimited custom sections — ranging from architecture diagrams to interview question banks and beyond.
 
 > **Privacy First**: All parsing happens locally. Only the specific code chunks needed for analysis are sent to LLM providers. Your API keys are encrypted at rest.
 
@@ -53,6 +53,7 @@ BuiltByMe bridges the gap between raw source code and high-level architectural u
 | **AST-Powered Extraction** | Tree-sitter parses 12+ languages locally - no code leaves your machine during extraction |
 | **Multi-Provider LLM** | Switch between Groq, Gemini, and Nvidia on a per-section basis |
 | **14 Documentation Sections** | From Project Overview to Interview Question Bank |
+| **Custom Sections (UI)** | Create unlimited custom documentation sections via the GUI — neon-cyan radial nodes with direct AI or copy/paste generation |
 | **2-Pass Retrieval** | Skeleton analysis -> targeted file retrieval to optimize token usage |
 | **Premium PDF Export** | Styled reports with Mermaid diagrams, colored badges, and dark headers |
 | **PDF Color Themes** | 6 theme presets (4 light, 2 dark) — Sunrise, Ocean, Forest, Royal, Midnight, Obsidian |
@@ -60,7 +61,7 @@ BuiltByMe bridges the gap between raw source code and high-level architectural u
 | **Encrypted Key Vault** | Fernet-encrypted API key storage with auto-generated master key |
 | **Radial Generator UI** | Interactive section-by-section generation with per-section customization |
 | **Dark/Light Theme** | Toggle between dark and light modes with smooth transitions |
-| **Toast Notifications** | Elegant glassmorphic notifications replacing browser alerts |
+| **Toast Notifications** | Elegant glassmorphic notifications centered at the top of the screen |
 | **Keyboard Shortcuts** | Power-user shortcuts for fast navigation (`Ctrl+K`, `Ctrl+N`, etc.) |
 | **Fine-Grained Control** | Detail level slider, skip/placeholder toggles, custom instructions per section |
 
@@ -69,52 +70,64 @@ BuiltByMe bridges the gap between raw source code and high-level architectural u
 ## Architecture
 
 ```mermaid
-graph TD
-    classDef client fill:#2D3748,stroke:#4A5568,stroke-width:2px,color:#fff;
-    classDef server fill:#2C7A7B,stroke:#319795,stroke-width:2px,color:#fff;
-    classDef engine fill:#805AD5,stroke:#9F7AEA,stroke-width:2px,color:#fff;
-    classDef db fill:#DD6B20,stroke:#ED8936,stroke-width:2px,color:#fff;
-    classDef external fill:#718096,stroke:#A0AEC0,stroke-width:2px,color:#fff;
+flowchart TD
+    classDef browser fill:#1e293b,stroke:#f97316,stroke-width:2px,color:#f8fafc
+    classDef flask fill:#14532d,stroke:#22c55e,stroke-width:2px,color:#f0fdf4
+    classDef extract fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#eef2ff
+    classDef store fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#fefce8
+    classDef ext fill:#1e1b4b,stroke:#6366f1,stroke-width:1.5px,color:#c7d2fe
+    classDef output fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fef2f2
 
-    subgraph Client [Browser Layer]
-        UI[UI / index.html, app.js]:::client
+    subgraph BROWSER ["Browser — Vanilla JS SPA"]
+        direction LR
+        APP["app.js\nProjects · Config · Viewer"]:::browser
+        GEN["generator.js\nRadial UI · Section Gen"]:::browser
+        STYLE["style.css + generator.css\nDesign System · Themes"]:::browser
     end
 
-    subgraph Server [Flask Application]
-        API[REST API / main.py]:::server
-        PDF[PDF Generator / WeasyPrint]:::server
-        MD[Markdown Exporter]:::server
-        Vault[Key Management]:::server
+    subgraph FLASK ["Flask Server — main.py"]
+        direction LR
+        API["REST API\n/api/* Routes"]:::flask
+        VAULT["Key Vault\nFernet Encryption"]:::flask
+        PDFGEN["PDF Engine\nWeasyPrint + Themes"]:::flask
+        MDGEN["Markdown\nExporter"]:::flask
+        CSEC["Custom Sections\nCreate · Generate · Paste"]:::flask
     end
 
-    subgraph Extraction [Extraction Engine]
-        Pipe[Pipeline / pipeline.py]:::engine
-        Fetcher[GitHub Fetcher]:::engine
-        TS[Tree-sitter AST]:::engine
-        Gateway[LLM Gateway / LangChain]:::engine
+    subgraph ENGINE ["Extraction Engine — extraction/"]
+        direction LR
+        PIPE["pipeline.py\nOrchestrator"]:::extract
+        FETCH["github_fetcher.py\nGitHub REST API"]:::extract
+        PARSE["extractors.py\nTree-sitter AST"]:::extract
+        LLM["llm_gateway.py\nLangChain Multi-LLM"]:::extract
+        PROMPTS["prompts.py\nPydantic Schemas"]:::extract
     end
 
-    DB[(SQLite / project.db)]:::db
-    GH[(GitHub API)]:::external
-    LLM[(LLM Providers)]:::external
+    DB[("SQLite\nproject.db")]:::store
+    GH{{"GitHub API"}}:::ext
+    PROVIDERS{{"LLM Providers\nGroq · Gemini · Nvidia"}}:::ext
 
-    UI -->|HTTP Requests| API
-    API --> PDF
-    API --> MD
-    API --> Vault
-    API --> Pipe
-    API --> Gateway
+    BROWSER -->|"fetch() REST"| FLASK
+    API --> VAULT
+    API --> PDFGEN
+    API --> MDGEN
+    API --> CSEC
+    API --> PIPE
+    API --> LLM
 
-    Pipe --> Fetcher
-    Fetcher -->|API Calls| GH
-    Pipe --> TS
-    TS -->|AST Metadata| DB
-    
-    Gateway -->|Prompts| LLM
-    Gateway -->|Generated Content| DB
-    
-    PDF -->|HTML to PDF| DB
-    MD -->|Sections to Markdown| DB
+    PIPE --> FETCH
+    PIPE --> PARSE
+    FETCH -->|"Clone + Files"| GH
+    PARSE -->|"AST Metadata"| DB
+
+    LLM --> PROMPTS
+    LLM -->|"Structured Prompts"| PROVIDERS
+    PROVIDERS -->|"Pydantic JSON"| LLM
+    LLM -->|"Save Content"| DB
+
+    PDFGEN -->|"Read Sections"| DB
+    MDGEN -->|"Read Sections"| DB
+    CSEC -->|"Read/Write"| DB
 ```
 
 For a detailed architecture breakdown, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -136,7 +149,7 @@ For a detailed architecture breakdown, see [docs/ARCHITECTURE.md](docs/ARCHITECT
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/BuiltByMe.git
+git clone https://github.com/A-Square8/BuiltByMe.git
 cd BuiltByMe
 
 # Create and activate a virtual environment
@@ -162,7 +175,8 @@ Open your browser to **http://localhost:5000** and you're ready to go.
 3. Click **Start Extraction** - watch the progress bar as files are parsed
 4. Once extracted, go to **⋮ menu** -> **Configuration** -> add your LLM API key
 5. Click any section node on the radial generator -> configure -> **Generate This Section**
-6. Click **Generate PDF** or **Export Markdown** to download your report
+6. *(Optional)* Go to **⋮ menu** -> **Custom Sections** to add your own specialized sections
+7. Click **Generate PDF** or **Export Markdown** to download your report
 
 ---
 

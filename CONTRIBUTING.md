@@ -26,7 +26,7 @@ Thank you for your interest in contributing to BuiltByMe! This guide will help y
 
 ```bash
 # Fork and clone
-git clone https://github.com/YOUR_USERNAME/BuiltByMe.git
+git clone https://github.com/A-Square8/BuiltByMe.git
 cd BuiltByMe
 
 # Create virtual environment
@@ -208,6 +208,10 @@ Use the [Tree-sitter Playground](https://tree-sitter.github.io/tree-sitter/playg
 
 ## Adding a New Documentation Section
 
+> **Note:** For users who want to add custom sections without writing code, BuiltByMe now supports **UI-based custom sections**. Go to **⋮ menu → Custom Sections** in the app to create custom documentation sections with neon-cyan radial nodes, AI generation, and export support — no code changes required.
+>
+> The steps below are for **developers** who want to add permanent, built-in sections to the core product.
+
 ### Step 1: Define the Pydantic Schema
 
 In `extraction/prompts.py`, create a new Pydantic model:
@@ -269,5 +273,5 @@ In `ui/generator.js`, add the section to the `SECTIONS` array to make it appear 
 
 ## Questions?
 
-Open an [issue](https://github.com/YOUR_USERNAME/BuiltByMe/issues) and we'll be happy to help!
+Open an [issue](https://github.com/A-Square8/BuiltByMe/issues) and we'll be happy to help!
 

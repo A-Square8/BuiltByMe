@@ -1,13 +1,16 @@
 import os
+import re
 import json
+import stat
 import threading
 import io
 import textwrap
 import base64
 import zlib
+import html as html_module
 from cryptography.fernet import Fernet
 from flask import Flask, request, jsonify, send_from_directory, send_file
-import traceback
+import traceback as traceback_module
 from flask_cors import CORS
 from extraction.pipeline import ExtractionPipeline
 from extraction.database import ProjectDB
@@ -24,7 +27,37 @@ from extraction.prompts import (
 )
 
 app = Flask(__name__, static_folder='ui', static_url_path='')
-CORS(app)
+CORS(app, origins=['http://localhost:5000', 'http://127.0.0.1:5000'])
+
+
+@app.after_request
+def set_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    return response
+
+
+def secure_project_name(name):
+    """Validate and sanitize project name to prevent path traversal."""
+    if not name or not isinstance(name, str):
+        return None
+    # Strip any path separators and parent directory references
+    name = name.strip()
+    if '..' in name or '/' in name or '\\' in name or '\x00' in name:
+        return None
+    # Only allow alphanumeric, hyphens, underscores, and dots
+    if not re.match(r'^[a-zA-Z0-9._-]+$', name):
+        return None
+    return name
+
+
+def _escape_html(text):
+    """Escape HTML special characters to prevent XSS."""
+    if text is None:
+        return ''
+    return html_module.escape(str(text))
 
 PROJECTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'my_projects')
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
@@ -34,8 +67,18 @@ extraction_status = {}
 def get_fernet():
     if not os.path.exists(MASTER_KEY_FILE):
         key = Fernet.generate_key()
-        with open(MASTER_KEY_FILE, 'wb') as f:
-            f.write(key)
+        # Create file with restrictive permissions (owner read/write only)
+        fd = os.open(MASTER_KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, key)
+        finally:
+            os.close(fd)
+    else:
+        # Ensure existing key file has correct permissions
+        try:
+            os.chmod(MASTER_KEY_FILE, stat.S_IRUSR | stat.S_IWUSR)
+        except OSError:
+            pass
     with open(MASTER_KEY_FILE, 'rb') as f:
         key = f.read()
     return Fernet(key)
@@ -52,7 +95,7 @@ def decrypt_val(val: str) -> str:
     f = get_fernet()
     try:
         return f.decrypt(val.encode()).decode()
-    except:
+    except Exception:
         return val
 
 def load_config():
@@ -150,6 +193,8 @@ def list_projects():
         return jsonify([])
     projects = []
     for name in sorted(os.listdir(PROJECTS_DIR)):
+        if not secure_project_name(name):
+            continue
         project_path = os.path.join(PROJECTS_DIR, name)
         db_path = os.path.join(project_path, 'project.db')
         if os.path.isdir(project_path) and os.path.exists(db_path):
@@ -163,7 +208,7 @@ def list_projects():
                     'info': info,
                     'extraction_status': status.get('status') if status else None,
                 })
-            except:
+            except Exception:
                 projects.append({'name': name, 'info': None, 'extraction_status': 'unknown'})
     return jsonify(projects)
 
@@ -188,8 +233,11 @@ def start_extraction():
     try:
         parts = repo_url.replace('https://github.com/', '').replace('.git', '').split('/')
         repo_name = parts[1]
-    except:
+    except (IndexError, ValueError):
         return jsonify({'error': 'Invalid GitHub URL'}), 400
+
+    if not secure_project_name(repo_name):
+        return jsonify({'error': 'Invalid repository name'}), 400
 
     if repo_name in extraction_status and extraction_status[repo_name].get('status') == 'extracting':
         return jsonify({'error': 'Extraction already in progress'}), 409
@@ -219,6 +267,9 @@ def get_extraction_status(project_name):
 
 @app.route('/api/project/<project_name>', methods=['GET'])
 def get_project(project_name):
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
     db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
     if not os.path.exists(db_path):
         return jsonify({'error': 'Project not found'}), 404
@@ -232,7 +283,7 @@ def get_project(project_name):
         if f.get('metadata'):
             try:
                 f['metadata'] = json.loads(f['metadata'])
-            except:
+            except (json.JSONDecodeError, TypeError):
                 pass
         
         # Fetch blocks and attach
@@ -254,12 +305,18 @@ def get_project(project_name):
 
 @app.route('/api/project/<project_name>/generate', methods=['POST'])
 def generate_section(project_name):
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
     db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
     if not os.path.exists(db_path):
         return jsonify({'error': 'Project not found'}), 404
 
     data = request.json
-    section_id = int(data.get('section_id'))
+    try:
+        section_id = int(data.get('section_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid section_id'}), 400
     provider = data.get('provider')
     api_key = data.get('api_key')
     strategy = data.get('strategy', '1_pass')
@@ -492,7 +549,8 @@ def generate_section(project_name):
         
         return jsonify({'message': 'Success', 'content': content, 'passes': passes_log})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        app.logger.error(f'Section generation error: {traceback_module.format_exc()}')
+        return jsonify({'error': 'Section generation failed. Check server logs for details.'}), 500
     finally:
         db.close()
 
@@ -506,6 +564,9 @@ def generate_section6(project_name):
     1. phase=discovery (or no phase): Run Phase 0 to discover frameworks. Returns framework list.
     2. phase=deep_dive, framework_index=N: Generate deep dive for framework N. Merges into section 6.
     """
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
     db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
     if not os.path.exists(db_path):
         return jsonify({'error': 'Project not found'}), 404
@@ -727,12 +788,16 @@ def generate_section6(project_name):
             return jsonify({'error': f'Unknown phase: {phase}'}), 400
 
     except Exception as e:
-        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+        app.logger.error(f'Section 6 generation error: {traceback_module.format_exc()}')
+        return jsonify({'error': 'Section 6 generation failed. Check server logs for details.'}), 500
     finally:
         db.close()
 
 @app.route('/api/project/<project_name>/generated', methods=['GET'])
 def get_generated_sections(project_name):
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
     db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
     if not os.path.exists(db_path):
         return jsonify({'error': 'Project not found'}), 404
@@ -743,7 +808,7 @@ def get_generated_sections(project_name):
         for s in sections:
             try:
                 s['content'] = json.loads(s['content'])
-            except:
+            except (json.JSONDecodeError, TypeError):
                 pass
         return jsonify(sections)
     finally:
@@ -768,6 +833,9 @@ def generate_pdf(project_name):
     except ImportError as e:
         return jsonify({'error': f'PDF dependencies not installed: {str(e)}'}), 500
         
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
     db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
     if not os.path.exists(db_path):
         return jsonify({'error': 'Project not found'}), 404
@@ -895,7 +963,7 @@ def generate_pdf(project_name):
         <body>
             <div class="title-page">
                 <div class="title-page-inner">
-                    <h1>{project_title}</h1>
+                    <h1>{_escape_html(project_title)}</h1>
                     <p>Technical Documentation & Interview Guide</p>
                     <div class="badge">Generated by BuiltByMe</div>
                 </div>
@@ -909,7 +977,7 @@ def generate_pdf(project_name):
         # Build TOC
         for s in sections:
             if s['section_id'] not in skip_sections:
-                html_content += f"<li style='margin-bottom: 12px; font-size: 12pt; border-bottom: 1px dotted {t['toc_dots']}; padding-bottom: 4px;'><strong style='color: {t['accent']};'>Section {s['section_id']}:</strong> {str(s['name'])}</li>\n"
+                html_content += f"<li style='margin-bottom: 12px; font-size: 12pt; border-bottom: 1px dotted {t['toc_dots']}; padding-bottom: 4px;'><strong style='color: {t['accent']};'>Section {s['section_id']}:</strong> {_escape_html(s['name'])}</li>\n"
         html_content += "</ul>\n"
         
         for s in sections:
@@ -919,7 +987,7 @@ def generate_pdf(project_name):
             if sid in skip_sections:
                 continue
             
-            html_content += f"<h2>Section {sid}: {str(s['name'])}</h2>\n"
+            html_content += f"<h2>Section {sid}: {_escape_html(s['name'])}</h2>\n"
             
             # Placeholder sections — heading only, blank content
             if sid in placeholder_sections:
@@ -929,7 +997,7 @@ def generate_pdf(project_name):
             content_dict = None
             try:
                 content_dict = json.loads(s['content'])
-            except:
+            except (json.JSONDecodeError, TypeError):
                 pass
                 
             if isinstance(content_dict, dict):
@@ -1668,8 +1736,8 @@ def generate_pdf(project_name):
             mimetype='application/pdf'
         )
     except Exception as e:
-        import traceback
-        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+        app.logger.error(f'PDF generation error: {traceback_module.format_exc()}')
+        return jsonify({'error': 'PDF generation failed. Check server logs for details.'}), 500
     finally:
         db.close()
 
@@ -1677,6 +1745,9 @@ def generate_pdf(project_name):
 
 @app.route('/api/project/<project_name>/markdown', methods=['POST'])
 def generate_markdown(project_name):
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
     db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
     if not os.path.exists(db_path):
         return jsonify({'error': 'Project not found'}), 404
@@ -1719,7 +1790,7 @@ def generate_markdown(project_name):
             content_dict = None
             try:
                 content_dict = json.loads(s['content'])
-            except:
+            except (json.JSONDecodeError, TypeError):
                 pass
 
             if isinstance(content_dict, dict):
@@ -1744,8 +1815,8 @@ def generate_markdown(project_name):
             mimetype='text/markdown'
         )
     except Exception as e:
-        import traceback
-        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+        app.logger.error(f'Markdown export error: {traceback_module.format_exc()}')
+        return jsonify({'error': 'Markdown export failed. Check server logs for details.'}), 500
     finally:
         db.close()
 
@@ -1802,6 +1873,9 @@ def _render_dict_to_markdown(d, sid=None):
 
 @app.route('/api/project/<project_name>/generated/<int:section_id>', methods=['DELETE'])
 def delete_generated_section(project_name, section_id):
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
     db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
     if not os.path.exists(db_path):
         return jsonify({'error': 'Project not found'}), 404
@@ -1813,9 +1887,495 @@ def delete_generated_section(project_name, section_id):
     finally:
         db.close()
 
+@app.route('/api/project/<project_name>/custom_section_def', methods=['POST'])
+def create_custom_section_def(project_name):
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
+    db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
+    if not os.path.exists(db_path):
+        return jsonify({'error': 'Project not found'}), 404
+
+    data = request.json
+    name = (data.get('name') or data.get('title') or data.get('section_title') or '').strip()
+    description = (data.get('description') or data.get('section_description') or '').strip()
+    if not name:
+        return jsonify({'error': 'Section title is required'}), 400
+
+    db = ProjectDB(db_path)
+    try:
+        existing_defs = db.get_custom_section_defs()
+        existing_gen = db.get_generated_sections()
+        custom_ids = [s['section_id'] for s in existing_defs + existing_gen if s['section_id'] >= 100]
+        next_id = max(custom_ids) + 1 if custom_ids else 100
+
+        db.save_custom_section_def(next_id, name, description)
+        return jsonify({
+            'message': 'Custom section created successfully',
+            'section_id': next_id,
+            'name': name,
+            'description': description
+        })
+    finally:
+        db.close()
+
+@app.route('/api/project/<project_name>/custom_section_defs', methods=['GET'])
+def get_custom_section_defs(project_name):
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
+    db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
+    if not os.path.exists(db_path):
+        return jsonify({'error': 'Project not found'}), 404
+
+    db = ProjectDB(db_path)
+    try:
+        defs = db.get_custom_section_defs()
+        return jsonify(defs)
+    finally:
+        db.close()
+
+@app.route('/api/project/<project_name>/custom_section_def/<int:section_id>', methods=['DELETE'])
+def delete_custom_section_def(project_name, section_id):
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
+    db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
+    if not os.path.exists(db_path):
+        return jsonify({'error': 'Project not found'}), 404
+
+    db = ProjectDB(db_path)
+    try:
+        db.delete_custom_section_def(section_id)
+        return jsonify({'message': 'Custom section definition deleted successfully'})
+    finally:
+        db.close()
+
+@app.route('/api/project/<project_name>/generate_custom', methods=['POST'])
+def generate_custom_section(project_name):
+    """
+    Generate a custom section using the built-in LLM gateway.
+    Takes a section title and description, builds a prompt, calls the LLM,
+    validates the response, and saves it as a custom section (ID >= 100).
+    """
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
+    db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
+    if not os.path.exists(db_path):
+        return jsonify({'error': 'Project not found'}), 404
+
+    data = request.json
+    section_title = (data.get('section_title') or '').strip()
+    section_description = (data.get('section_description') or '').strip()
+    provider = data.get('provider')
+    api_key = data.get('api_key')
+    detail_level = data.get('detail_level', 1)
+    custom_instructions = data.get('custom_instructions', '')
+    strategy = data.get('strategy', '1_pass')
+
+    if not section_title:
+        return jsonify({'error': 'Section title is required'}), 400
+    if not section_description:
+        return jsonify({'error': 'Section description is required'}), 400
+    if not provider or not api_key:
+        return jsonify({'error': 'Provider and API key are required'}), 400
+
+    # Resolve saved key references
+    if str(api_key).startswith('saved_'):
+        try:
+            key_index = int(api_key.replace('saved_', ''))
+            cfg = load_config()
+            keys = cfg.get('llm_keys', [])
+            if 0 <= key_index < len(keys):
+                api_key = decrypt_val(keys[key_index].get('key'))
+                provider = keys[key_index].get('provider')
+            else:
+                return jsonify({'error': 'Invalid saved key reference'}), 400
+        except ValueError:
+            return jsonify({'error': 'Invalid saved key format'}), 400
+
+    db = ProjectDB(db_path)
+    try:
+        # Build project context
+        info = db.get_repo_info()
+        files = db.get_files()
+
+        context_str = f"Project Name: {info.get('full_name')}\n"
+        context_str += f"Description: {info.get('description')}\n"
+        context_str += f"Language: {info.get('language')}\n\n"
+
+        # Add file list
+        context_str += "Files in repository:\n"
+        for f in files:
+            context_str += f"- {f['path']} ({f['size']} bytes)\n"
+
+        # Add README if exists
+        readme_file = next((f for f in files if 'readme' in f['path'].lower()), None)
+        if readme_file:
+            blocks = db.get_code_blocks(readme_file['id'])
+            readme_content = "".join([b['content'] for b in blocks if b['content']])
+            if readme_content:
+                context_str += f"\n\n--- README.md ---\n{readme_content}\n--- END README ---\n"
+
+        passes_log = []
+
+        if strategy == '1_pass':
+            context_str += "\n\n--- ENTIRE CODEBASE ---\n"
+            for f in files:
+                if 'readme' in f['path'].lower():
+                    continue
+                blocks = db.get_code_blocks(f['id'])
+                file_content = "".join([b['content'] for b in blocks if b['content']])
+                if file_content:
+                    context_str += f"\nFile: {f['path']}\n{file_content}\n"
+            context_str += "--- END ENTIRE CODEBASE ---\n"
+            passes_log.append({'pass': 1, 'info': 'Full codebase dump (1-pass)'})
+        elif strategy == '2_pass':
+            # Build skeleton for pass 1
+            skeleton_str = context_str
+            skeleton_str += "\n\n--- FILE SKELETON WITH METADATA ---\n"
+            for f in files:
+                if 'readme' in f['path'].lower():
+                    continue
+                skeleton_str += f"\nFile: {f['path']} | Language: {f.get('language', 'unknown')} | Size: {f['size']} bytes\n"
+                if f.get('metadata'):
+                    try:
+                        meta = json.loads(f['metadata']) if isinstance(f['metadata'], str) else f['metadata']
+                        imports = meta.get('imports', []) or meta.get('includes', []) or meta.get('uses', [])
+                        if imports:
+                            skeleton_str += f"  Imports: {', '.join(imports[:20])}\n"
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                blocks = db.get_code_blocks(f['id'])
+                block_names = []
+                for b in blocks:
+                    if b.get('block_type') in ('class', 'function', 'method') and b.get('name'):
+                        prefix = b['block_type']
+                        parent = f" (in {b['parent_name']})" if b.get('parent_name') else ''
+                        block_names.append(f"{prefix} {b['name']}{parent}")
+                if block_names:
+                    skeleton_str += f"  Definitions: {', '.join(block_names[:15])}\n"
+            skeleton_str += "--- END FILE SKELETON ---\n"
+
+            retrieval_user_prompt = (
+                f"I need to generate a custom documentation section titled: **{section_title}**\n"
+                f"Section focus: {section_description}\n\n"
+                f"Please analyze the file skeleton below and tell me which files I should retrieve "
+                f"the full source code for.\n\n{skeleton_str}"
+            )
+
+            retrieval_result = generate_content(
+                provider=provider,
+                api_key=api_key,
+                system_prompt=FILE_RETRIEVAL_PROMPT,
+                user_prompt=retrieval_user_prompt,
+                response_schema=FileRetrievalRequest
+            )
+
+            if hasattr(retrieval_result, 'model_dump'):
+                retrieval_data = retrieval_result.model_dump()
+            else:
+                retrieval_data = retrieval_result
+
+            requested_paths = retrieval_data.get('requested_files', [])[:15]
+            reasoning = retrieval_data.get('reasoning', '')
+
+            passes_log.append({
+                'pass': 1,
+                'info': f'LLM analyzed skeleton and requested {len(requested_paths)} files',
+                'reasoning': reasoning,
+                'requested_files': requested_paths
+            })
+
+            file_lookup = {f['path']: f for f in files}
+            context_str += "\n\n--- SELECTED SOURCE CODE (retrieved via 2-pass) ---\n"
+            retrieved_count = 0
+            for path in requested_paths:
+                file_record = file_lookup.get(path)
+                if not file_record:
+                    continue
+                if 'readme' in path.lower():
+                    continue
+                blocks = db.get_code_blocks(file_record['id'])
+                file_content = "".join([b['content'] for b in blocks if b['content']])
+                if file_content:
+                    context_str += f"\nFile: {path}\n{file_content}\n"
+                    retrieved_count += 1
+            context_str += "--- END SELECTED SOURCE CODE ---\n"
+            passes_log.append({'pass': 2, 'info': f'Retrieved {retrieved_count} files for focused generation'})
+
+        # Build system prompt for the custom section
+        system_prompt = f"""You are an expert Principal Software Engineer analyzing a codebase.
+Your goal is to generate a custom documentation section titled: "{section_title}"
+
+Section Description / Focus:
+{section_description}
+
+# Instructions
+1. Analyze the provided codebase context carefully.
+2. Generate a comprehensive, structured analysis based on the section title and description above.
+3. Your response MUST be a valid JSON object with clear, descriptive string keys.
+4. Structure your response logically — group related information together.
+5. Use a mix of strings (for explanations), arrays (for lists), and nested objects (for grouped data).
+6. Write in a conversational, first-person interview style: "So what I did was...", "The reason I chose..."
+
+# CRITICAL — Response Format
+You MUST return a valid JSON object. Structure it like this:
+{{
+    "overview": "A 3-5 sentence summary of the section topic as it relates to this project...",
+    "key_points": [
+        {{
+            "title": "Point title",
+            "explanation": "Detailed explanation in conversational style..."
+        }}
+    ],
+    "detailed_analysis": "In-depth analysis paragraph...",
+    "recommendations": ["Recommendation 1", "Recommendation 2"],
+    "interview_angle": "How to discuss this in an interview..."
+}}
+
+The exact keys depend on what makes sense for the topic "{section_title}". Use descriptive key names.
+Include 4-8 top-level keys for a comprehensive analysis.
+
+# CRITICAL — Writing Style
+- Write like you're explaining to an interviewer face-to-face.
+- Use first person: "I designed...", "The reason I went with..."
+- Be specific and opinionated. Real trade-offs, real reasoning.
+- Short, punchy sentences. Sound like a real engineer, not a textbook.
+"""
+
+        detail_instructions = {
+            0: "\n\nDETAIL LEVEL: SHORT. Keep all responses brief. 1-2 sentences per field. Use bullet points over paragraphs.",
+            1: "\n\nDETAIL LEVEL: MEDIUM. Provide balanced detail — 2-3 sentences for paragraph fields.",
+            2: "\n\nDETAIL LEVEL: DETAILED. Provide comprehensive, in-depth analysis. 5-8 sentences for paragraph fields. Include technical nuances, edge cases, and implementation specifics."
+        }
+        system_prompt += detail_instructions.get(detail_level, detail_instructions[1])
+
+        if custom_instructions:
+            system_prompt += f"\n\nUser Custom Instructions:\n{custom_instructions}"
+
+        user_prompt = f"Please generate the custom section based on the following codebase context:\n\n{context_str}"
+
+        # Generate without structured output (raw JSON mode) since we don't have a Pydantic schema
+        result = generate_content(
+            provider=provider,
+            api_key=api_key,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_schema=None,
+            temperature=0.3
+        )
+
+        # Parse the LLM response as JSON
+        raw_content = result if isinstance(result, str) else (result.content if hasattr(result, 'content') else str(result))
+
+        # Try to extract JSON from the response
+        content = None
+        # Try direct parse
+        try:
+            content = json.loads(raw_content)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Try extracting from markdown code block
+        if content is None:
+            import re as _re
+            json_match = _re.search(r'```(?:json)?\s*\n?(.*?)\n?```', raw_content, _re.DOTALL)
+            if json_match:
+                try:
+                    content = json.loads(json_match.group(1))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        # Fallback: wrap raw text as content
+        if content is None:
+            content = {"raw_content": raw_content}
+
+        # Determine section ID: use provided section_id or compute 100+ range for custom sections
+        if data.get('section_id'):
+            next_id = int(data.get('section_id'))
+        else:
+            existing_sections = db.get_generated_sections()
+            existing_defs = db.get_custom_section_defs()
+            custom_ids = [s['section_id'] for s in existing_sections + existing_defs if s['section_id'] >= 100]
+            next_id = max(custom_ids) + 1 if custom_ids else 100
+
+        db.save_generated_section(next_id, section_title, content)
+
+        return jsonify({
+            'message': 'Custom section generated successfully',
+            'section_id': next_id,
+            'section_title': section_title,
+            'content': content,
+            'passes': passes_log
+        })
+    except Exception as e:
+        app.logger.error(f'Custom section generation error: {traceback_module.format_exc()}')
+        return jsonify({'error': f'Custom section generation failed: {str(e)}'}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/project/<project_name>/add_custom_manual', methods=['POST'])
+def add_custom_section_manual(project_name):
+    """
+    Add a custom section by pasting raw JSON content (manual mode).
+    Validates the JSON and saves it with a custom section ID >= 100.
+    """
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
+    db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
+    if not os.path.exists(db_path):
+        return jsonify({'error': 'Project not found'}), 404
+
+    data = request.json
+    section_title = (data.get('section_title') or '').strip()
+    raw_content = (data.get('content') or '').strip()
+
+    if not section_title:
+        return jsonify({'error': 'Section title is required'}), 400
+    if not raw_content:
+        return jsonify({'error': 'Content is required'}), 400
+
+    # Try to parse as JSON
+    content = None
+    try:
+        content = json.loads(raw_content)
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Try extracting from markdown code block
+    if content is None:
+        json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', raw_content, re.DOTALL)
+        if json_match:
+            try:
+                content = json.loads(json_match.group(1))
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    if content is None:
+        return jsonify({'error': 'Invalid JSON content. Please paste valid JSON or a JSON code block.'}), 400
+
+    if not isinstance(content, dict):
+        return jsonify({'error': 'Content must be a JSON object (not an array or primitive).'}), 400
+
+    db = ProjectDB(db_path)
+    try:
+        if data.get('section_id'):
+            next_id = int(data.get('section_id'))
+        else:
+            existing_sections = db.get_generated_sections()
+            existing_defs = db.get_custom_section_defs()
+            custom_ids = [s['section_id'] for s in existing_sections + existing_defs if s['section_id'] >= 100]
+            next_id = max(custom_ids) + 1 if custom_ids else 100
+
+        db.save_generated_section(next_id, section_title, content)
+
+        return jsonify({
+            'message': 'Custom section added successfully',
+            'section_id': next_id,
+            'section_title': section_title,
+            'content': content
+        })
+    except Exception as e:
+        app.logger.error(f'Manual custom section error: {traceback_module.format_exc()}')
+        return jsonify({'error': f'Failed to add custom section: {str(e)}'}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/project/<project_name>/custom_prompt', methods=['POST'])
+def get_custom_section_prompt(project_name):
+    """
+    Generate a ready-to-copy prompt for external LLM usage.
+    Returns the full prompt with project context that the user can paste into ChatGPT/Claude.
+    """
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
+    db_path = os.path.join(PROJECTS_DIR, project_name, 'project.db')
+    if not os.path.exists(db_path):
+        return jsonify({'error': 'Project not found'}), 404
+
+    data = request.json
+    section_title = (data.get('section_title') or '').strip()
+    section_description = (data.get('section_description') or '').strip()
+
+    if not section_title or not section_description:
+        return jsonify({'error': 'Section title and description are required'}), 400
+
+    db = ProjectDB(db_path)
+    try:
+        info = db.get_repo_info()
+        files = db.get_files()
+
+        # Build a condensed context for copy-paste
+        context_str = f"Project Name: {info.get('full_name')}\n"
+        context_str += f"Description: {info.get('description')}\n"
+        context_str += f"Language: {info.get('language')}\n\n"
+        context_str += "Files in repository:\n"
+        for f in files:
+            context_str += f"- {f['path']} ({f['size']} bytes, {f.get('language', 'unknown')})\n"
+
+        # Include file skeleton with metadata
+        context_str += "\n--- FILE SKELETON WITH METADATA ---\n"
+        for f in files[:50]:  # Limit for copy-paste friendliness
+            if f.get('metadata'):
+                try:
+                    meta = json.loads(f['metadata']) if isinstance(f['metadata'], str) else f['metadata']
+                    imports = meta.get('imports', []) or meta.get('includes', [])
+                    if imports:
+                        context_str += f"  {f['path']}: imports [{', '.join(imports[:10])}]\n"
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        prompt = f"""You are an expert Principal Software Engineer analyzing a codebase.
+
+I need you to generate a custom documentation section for my project.
+
+# Section: {section_title}
+# Focus: {section_description}
+
+# Instructions
+1. Analyze the project context below carefully.
+2. Generate a comprehensive, structured analysis as a valid JSON object.
+3. Use descriptive string keys, mix of strings, arrays, and nested objects.
+4. Write in a conversational, first-person interview style.
+5. Include 4-8 top-level keys for comprehensive coverage.
+
+# Response Format
+Return ONLY a valid JSON object wrapped in ```json ... ``` code fences. Example structure:
+```json
+{{
+    "overview": "Summary of this topic for the project...",
+    "key_points": [
+        {{"title": "Point 1", "explanation": "Detailed explanation..."}},
+        {{"title": "Point 2", "explanation": "Detailed explanation..."}}
+    ],
+    "detailed_analysis": "In-depth analysis...",
+    "recommendations": ["Item 1", "Item 2"],
+    "interview_angle": "How to discuss this in an interview..."
+}}
+```
+
+Adapt the keys to match the topic "{section_title}". Be comprehensive and technical.
+
+# Project Context
+{context_str}
+"""
+        return jsonify({'prompt': prompt})
+    finally:
+        db.close()
+
+
 @app.route('/api/project/<project_name>/delete', methods=['DELETE'])
 def delete_project(project_name):
     import shutil
+    project_name = secure_project_name(project_name)
+    if not project_name:
+        return jsonify({'error': 'Invalid project name'}), 400
     project_path = os.path.join(PROJECTS_DIR, project_name)
     if os.path.exists(project_path):
         shutil.rmtree(project_path)
@@ -1827,4 +2387,4 @@ def delete_project(project_name):
 
 if __name__ == '__main__':
     os.makedirs(PROJECTS_DIR, exist_ok=True)
-    app.run(debug=True, port=5000)
+    app.run(debug=False, port=5000)

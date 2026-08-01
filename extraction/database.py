@@ -74,6 +74,14 @@ class ProjectDB:
                 content TEXT,
                 generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS custom_section_defs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                section_id INTEGER UNIQUE,
+                name TEXT,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
         ''')
         self.conn.commit()
 
@@ -188,6 +196,25 @@ class ProjectDB:
         return [dict(r) for r in rows]
 
     def delete_generated_section(self, section_id):
+        self.conn.execute('DELETE FROM generated_sections WHERE section_id = ?', (section_id,))
+        self.conn.commit()
+
+    def save_custom_section_def(self, section_id, name, description):
+        self.conn.execute(
+            'DELETE FROM custom_section_defs WHERE section_id = ?', (section_id,)
+        )
+        self.conn.execute(
+            'INSERT INTO custom_section_defs (section_id, name, description) VALUES (?,?,?)',
+            (section_id, name, description)
+        )
+        self.conn.commit()
+
+    def get_custom_section_defs(self):
+        rows = self.conn.execute('SELECT * FROM custom_section_defs ORDER BY section_id').fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_custom_section_def(self, section_id):
+        self.conn.execute('DELETE FROM custom_section_defs WHERE section_id = ?', (section_id,))
         self.conn.execute('DELETE FROM generated_sections WHERE section_id = ?', (section_id,))
         self.conn.commit()
 

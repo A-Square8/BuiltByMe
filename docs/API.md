@@ -12,6 +12,7 @@ All endpoints return JSON unless otherwise noted. Request bodies should be `Cont
 - [Repository Extraction](#repository-extraction)
 - [Configuration](#configuration)
 - [Section Generation](#section-generation)
+- [Custom Sections](#custom-sections)
 - [Generated Content](#generated-content)
 - [PDF Export](#pdf-export)
 
@@ -266,7 +267,7 @@ Generates a single documentation section using the specified LLM.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `section_id` | int | ✅ | — | Section number (1–14, except 6) |
+| `section_id` | int | ✅ | — | Section number (1–14, except 6; or ≥100 for custom sections) |
 | `provider` | string | ✅ | — | `groq`, `gemini`, or `nvidia` |
 | `api_key` | string | ✅ | — | Raw API key or `saved_N` reference |
 | `strategy` | string | ❌ | `1_pass` | `1_pass` or `2_pass` |
@@ -346,6 +347,125 @@ Section 6 uses a chunked, multi-phase generation approach.
   "content": { "framework_name": "Tree-sitter", "basics": [...], ... },
   "progress": { "completed": 2, "total": 5 }
 }
+```
+
+---
+
+## Custom Sections
+
+Custom sections allow users to create unlimited, specialized documentation sections (ID ≥ 100) via the UI without modifying code.
+
+### Create Custom Section Definition
+
+```
+POST /api/project/<project_name>/custom_section_def
+```
+
+Registers a new custom section definition for the project.
+
+**Request Body**
+```json
+{
+  "name": "Security Audit",
+  "description": "Analyze the codebase for security vulnerabilities, authentication patterns, and data handling practices."
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | ✅ | Display name for the section |
+| `description` | string | ✅ | Instructions/context for the AI generation prompt |
+
+**Response** `200 OK`
+```json
+{
+  "message": "Custom section created",
+  "section_id": 100,
+  "name": "Security Audit"
+}
+```
+
+---
+
+### List Custom Section Definitions
+
+```
+GET /api/project/<project_name>/custom_section_defs
+```
+
+Returns all custom section definitions for the project.
+
+**Response** `200 OK`
+```json
+[
+  {
+    "section_id": 100,
+    "name": "Security Audit",
+    "description": "Analyze the codebase for security vulnerabilities..."
+  }
+]
+```
+
+---
+
+### Delete Custom Section Definition
+
+```
+DELETE /api/project/<project_name>/custom_section_def/<section_id>
+```
+
+Deletes a custom section definition and its generated content.
+
+**Response** `200 OK`
+```json
+{ "message": "Custom section deleted" }
+```
+
+---
+
+### Get Custom Section Prompt
+
+```
+POST /api/project/<project_name>/custom_section_prompt
+```
+
+Generates a ready-to-use prompt string for external AI tools (ChatGPT, Claude, etc.).
+
+**Request Body**
+```json
+{
+  "section_id": 100
+}
+```
+
+**Response** `200 OK`
+```json
+{
+  "prompt": "You are a senior software engineer...\n\n## Codebase Context\n..."
+}
+```
+
+---
+
+### Save Manual Custom Section Response
+
+```
+POST /api/project/<project_name>/custom_section_manual
+```
+
+Saves an externally-generated AI response for a custom section.
+
+**Request Body**
+```json
+{
+  "section_id": 100,
+  "content": "{ \"findings\": [...], \"summary\": \"...\" }"
+}
+```
+
+**Response** `200 OK`
+```json
+{ "message": "Section saved successfully" }
 ```
 
 ---

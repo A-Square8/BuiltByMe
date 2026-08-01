@@ -1,6 +1,6 @@
 // ===== PDF Generator UI — Section Data & Logic (UI Only) =====
 
-const SECTIONS = [
+const DEFAULT_SECTIONS = [
     { id: 1, name: 'Project Overview', short: 'Overview', desc: 'Project name, description, domain, stack, problem, workflow, deployment, elevator pitch.' },
     { id: 2, name: 'Tech Stack & Dependencies', short: 'Tech Stack', desc: 'Libraries, frameworks, versions, purposes, alternatives, architectural layers.' },
     { id: 3, name: 'Architecture & Module Map', short: 'Architecture', desc: 'Folder structure, module purposes, entry points, data flow, system diagrams.' },
@@ -16,6 +16,7 @@ const SECTIONS = [
     { id: 13, name: 'Deployment & Infra', short: 'Deploy', desc: 'Hosting, CI/CD, infrastructure, environment separation, DevOps.' },
     { id: 14, name: 'Interview Question Bank', short: 'Questions', desc: 'Advanced questions based on the project, detailed answers, discussion points.' },
 ];
+let SECTIONS = [...DEFAULT_SECTIONS];
 
 const NODE_ICONS = {
     1: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
@@ -52,17 +53,49 @@ function initSectionStates() {
 initSectionStates();
 
 // ===== Initialize for Selected Project =====
-function initGeneratorForProject(projectName) {
+async function initGeneratorForProject(projectName) {
     document.getElementById('genHubProject').textContent = projectName || 'Project';
+    SECTIONS = [...DEFAULT_SECTIONS];
     initSectionStates(); // Reset states for new project
     activeSection = null;
-    renderNodes();
-    updateProgressRing();
     closePanel();
     
     const genAllBtn = document.getElementById('genAllBtnLeft') || document.getElementById('genHubBtn');
     if (genAllBtn) genAllBtn.disabled = false;
+
+    if (projectName) {
+        try {
+            const defsRes = await fetch(`/api/project/${projectName}/custom_section_defs`);
+            const genRes = await fetch(`/api/project/${projectName}/generated`);
+            const defs = defsRes.ok ? await defsRes.json() : [];
+            const gen = genRes.ok ? await genRes.json() : [];
+            
+            const customMap = new Map();
+            defs.forEach(d => customMap.set(d.section_id, { id: d.section_id, name: d.name, short: d.name.split(' ')[0] || 'Custom', desc: d.description, isCustom: true }));
+            gen.forEach(g => {
+                if (g.section_id >= 100 && !customMap.has(g.section_id)) {
+                    customMap.set(g.section_id, { id: g.section_id, name: g.name, short: g.name.split(' ')[0] || 'Custom', desc: 'Custom documentation section', isCustom: true });
+                }
+            });
+
+            const sortedCustoms = Array.from(customMap.values()).sort((a, b) => a.id - b.id);
+            SECTIONS.push(...sortedCustoms);
+            initSectionStates();
+
+            const completedIds = gen.map(g => g.section_id);
+            SECTIONS.forEach(sec => {
+                if (completedIds.includes(sec.id) && sectionStates[sec.id]) {
+                    sectionStates[sec.id].status = 'completed';
+                }
+            });
+        } catch(e) {
+            console.error('Failed to load custom sections for radial generator:', e);
+        }
+    }
+    renderNodes();
+    updateProgressRing();
 }
+window.initGeneratorForProject = initGeneratorForProject;
 
 // ===== Render Radial Nodes =====
 function renderNodes() {
@@ -80,7 +113,7 @@ function renderNodes() {
 
         // Connection line
         const line = document.createElement('div');
-        line.className = 'gen-connection';
+        line.className = 'gen-connection' + (sec.id >= 100 ? ' custom-connection' : '');
         const dx = x - cx, dy = y - cy;
         const len = Math.sqrt(dx*dx + dy*dy) - 36;
         const deg = Math.atan2(dy, dx) * 180 / Math.PI;
@@ -88,9 +121,9 @@ function renderNodes() {
         container.appendChild(line);
 
         // Node
-        const state = sectionStates[sec.id];
+        const state = sectionStates[sec.id] || { status: 'idle', skip: false, locked: false };
         const node = document.createElement('div');
-        node.className = 'gen-node';
+        node.className = 'gen-node' + (sec.id >= 100 ? ' custom-node' : '');
         node.id = `genNode_${sec.id}`;
         if (activeSection === sec.id) node.classList.add('active');
         if (state.locked) node.classList.add('locked');
@@ -107,9 +140,10 @@ function renderNodes() {
         else if (state.status === 'completed') statusBadge = '<div class="gen-node-status done-icon"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>';
         else if (state.skip) statusBadge = '<div class="gen-node-status skip-icon"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>';
 
+        const iconHtml = NODE_ICONS[sec.id] || '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>';
         node.innerHTML = `
             <span class="gen-node-num">${sec.id}</span>
-            <span class="gen-node-icon">${NODE_ICONS[sec.id]}</span>
+            <span class="gen-node-icon">${iconHtml}</span>
             ${statusBadge}
         `;
 
@@ -135,6 +169,7 @@ function renderNodes() {
 // ===== Select Section / Open Panel =====
 function selectSection(id) {
     activeSection = id;
+    window.activeSection = id;
     renderNodes();
     openPanel(id);
 }
@@ -170,12 +205,18 @@ function openPanel(id) {
         ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Unlock'
         : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg> Lock';
 
+    const customActions = document.getElementById('genCustomActions');
+    const pasteArea = document.getElementById('genPasteArea');
+    if (customActions) customActions.style.display = (id >= 100) ? 'flex' : 'none';
+    if (pasteArea) pasteArea.style.display = 'none';
+
     panel.classList.add('open');
 }
 
 function closePanel() {
     document.getElementById('genPanel').classList.remove('open');
     activeSection = null;
+    window.activeSection = null;
     renderNodes();
 }
 
@@ -375,6 +416,28 @@ function initGeneratorEvents() {
                 logToTerminal(`Success! All frameworks for Section 6 analyzed and saved.`);
                 state.status = 'completed';
                 
+            } else if (secId >= 100) {
+                // --- CUSTOM SECTION GENERATION ---
+                const secObj = SECTIONS.find(s => s.id === secId);
+                const res = await fetch(`/api/project/${projectName}/generate_custom`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        section_id: secId,
+                        section_title: secObj ? secObj.name : `Custom ${secId}`,
+                        section_description: secObj ? secObj.desc : '',
+                        provider: state.provider,
+                        api_key: state.apiKey,
+                        strategy: state.strategy || '1_pass',
+                        detail_level: state.detailLevel,
+                        custom_instructions: state.customInstructions
+                    })
+                });
+                logToTerminal(`Received response from backend for custom section.`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to generate custom section');
+                logToTerminal(`Success! Custom Section "${data.section_title}" saved to project DB.`);
+                state.status = 'completed';
             } else {
                 // --- STANDARD GENERATION FOR OTHER SECTIONS ---
                 const res = await fetch(`/api/project/${projectName}/generate`, {
