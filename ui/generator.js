@@ -39,8 +39,20 @@ const NODE_ICONS = {
 let sectionStates = {};
 let activeSection = null;
 
+// Track which sections have been explicitly given a per-section API key override.
+// When a common key is applied, sections in this set are NOT overwritten.
+let sectionKeyOverrides = new Set();
+
+// Track the current common key value so we can detect overrides properly
+let currentCommonApiKey = '';
+let currentCommonProvider = '';
+
 function initSectionStates() {
     sectionStates = {};
+    // Reset per-section overrides when switching projects or reinitializing
+    sectionKeyOverrides = new Set();
+    currentCommonApiKey = '';
+    currentCommonProvider = '';
     SECTIONS.forEach(s => {
         sectionStates[s.id] = {
             provider: 'gemini', apiKey: '', detailLevel: (s.id === 6 || s.id === 14) ? 2 : 1,
@@ -59,7 +71,7 @@ async function initGeneratorForProject(projectName) {
     initSectionStates(); // Reset states for new project
     activeSection = null;
     closePanel();
-    
+
     const genAllBtn = document.getElementById('genAllBtnLeft') || document.getElementById('genHubBtn');
     if (genAllBtn) genAllBtn.disabled = false;
 
@@ -69,7 +81,7 @@ async function initGeneratorForProject(projectName) {
             const genRes = await fetch(`/api/project/${projectName}/generated`);
             const defs = defsRes.ok ? await defsRes.json() : [];
             const gen = genRes.ok ? await genRes.json() : [];
-            
+
             const customMap = new Map();
             defs.forEach(d => customMap.set(d.section_id, { id: d.section_id, name: d.name, short: d.name.split(' ')[0] || 'Custom', desc: d.description, isCustom: true }));
             gen.forEach(g => {
@@ -88,7 +100,7 @@ async function initGeneratorForProject(projectName) {
                     sectionStates[sec.id].status = 'completed';
                 }
             });
-        } catch(e) {
+        } catch (e) {
             console.error('Failed to load custom sections for radial generator:', e);
         }
     }
@@ -115,7 +127,7 @@ function renderNodes() {
         const line = document.createElement('div');
         line.className = 'gen-connection' + (sec.id >= 100 ? ' custom-connection' : '');
         const dx = x - cx, dy = y - cy;
-        const len = Math.sqrt(dx*dx + dy*dy) - 36;
+        const len = Math.sqrt(dx * dx + dy * dy) - 36;
         const deg = Math.atan2(dy, dx) * 180 / Math.PI;
         line.style.cssText = `width:${len}px;transform:rotate(${deg}deg);`;
         container.appendChild(line);
@@ -174,6 +186,29 @@ function selectSection(id) {
     openPanel(id);
 }
 
+function syncPanelKeyDisplay(state) {
+    const genSelect = document.getElementById('genSavedKeySelect');
+    const genApiKeyEl = document.getElementById('genApiKey');
+    const genProviderEl = document.getElementById('genProvider');
+
+    if (state.provider && genProviderEl) {
+        genProviderEl.value = state.provider;
+    }
+
+    if (state.apiKey && typeof state.apiKey === 'string' && state.apiKey.startsWith('saved_')) {
+        if (genSelect) genSelect.value = state.apiKey;
+        const idx = parseInt(state.apiKey.replace('saved_', ''), 10);
+        if (typeof savedApiKeys !== 'undefined' && savedApiKeys[idx] && genApiKeyEl) {
+            genApiKeyEl.value = savedApiKeys[idx].key;
+        } else if (genApiKeyEl) {
+            genApiKeyEl.value = state.apiKey;
+        }
+    } else {
+        if (genSelect) genSelect.value = '';
+        if (genApiKeyEl) genApiKeyEl.value = state.apiKey || '';
+    }
+}
+
 function openPanel(id) {
     const panel = document.getElementById('genPanel');
     const sec = SECTIONS.find(s => s.id === id);
@@ -183,13 +218,11 @@ function openPanel(id) {
     document.getElementById('genPanelTitle').textContent = `${sec.id}. ${sec.name}`;
     document.getElementById('genPanelSubtitle').textContent = sec.desc;
 
-    // Provider
-    document.getElementById('genProvider').value = state.provider;
+    // Provider, API Key, and Saved Select display synchronization
+    syncPanelKeyDisplay(state);
     // Strategy
     const genStrategyEl = document.getElementById('genStrategy');
     if (genStrategyEl) genStrategyEl.value = state.strategy || '1_pass';
-    // API Key
-    document.getElementById('genApiKey').value = state.apiKey;
     // Detail Level
     setDetailLevel(state.detailLevel, false);
     // Toggles
@@ -267,9 +300,13 @@ function initGeneratorEvents() {
     const genPanelClose = document.getElementById('genPanelClose');
     if (genPanelClose) genPanelClose.addEventListener('click', closePanel);
 
-    // Provider change
+    // Provider change (per-section override)
     document.getElementById('genProvider').addEventListener('change', e => {
-        if (activeSection) sectionStates[activeSection].provider = e.target.value;
+        if (activeSection) {
+            sectionStates[activeSection].provider = e.target.value;
+            // Mark this section as having a per-section override
+            sectionKeyOverrides.add(activeSection);
+        }
     });
 
     // Strategy change
@@ -292,9 +329,17 @@ function initGeneratorEvents() {
         });
     }
 
-    // API Key change
+    // API Key change (per-section override)
     document.getElementById('genApiKey').addEventListener('input', e => {
-        if (activeSection) sectionStates[activeSection].apiKey = e.target.value;
+        if (activeSection) {
+            sectionStates[activeSection].apiKey = e.target.value;
+            const commonInput = document.getElementById('commonApiKey');
+            if (commonInput && e.target.value === commonInput.value) {
+                sectionKeyOverrides.delete(activeSection);
+            } else {
+                sectionKeyOverrides.add(activeSection);
+            }
+        }
     });
 
     // Detail Level clicks
@@ -331,7 +376,7 @@ function initGeneratorEvents() {
     async function executeGeneration(secId) {
         const state = sectionStates[secId];
         if (state.locked || state.skip || state.placeholder) return;
-        
+
         const projectName = document.getElementById('genHubProject').textContent;
         if (!projectName || projectName === 'Project') {
             showToast('No project selected.', 'warning');
@@ -346,18 +391,18 @@ function initGeneratorEvents() {
         state.status = 'generating';
         renderNodes();
         updateProgressRing();
-        
+
         logToTerminal(`Starting extraction for Section ${secId}`);
         if (secId !== 6) {
             logToTerminal(`Strategy: ${state.strategy || '1_pass'}`);
         }
         logToTerminal(`Connecting to ${state.provider} via LLM Gateway...`);
-        
+
         try {
             if (secId === 6) {
                 // --- SECTION 6: CHUNKED PER-FRAMEWORK GENERATION ---
                 logToTerminal(`Phase 0: Discovering frameworks...`);
-                
+
                 const discRes = await fetch(`/api/project/${projectName}/generate_s6`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -369,24 +414,24 @@ function initGeneratorEvents() {
                         custom_instructions: state.customInstructions
                     })
                 });
-                
+
                 const discData = await discRes.json();
                 if (!discRes.ok) throw new Error(discData.error || 'Failed during discovery');
-                
+
                 const frameworks = discData.frameworks || [];
                 const completed = discData.completed || [];
-                
+
                 logToTerminal(`Discovered ${frameworks.length} frameworks to analyze.`);
                 if (completed.length > 0) {
                     logToTerminal(`Already completed: ${completed.join(', ')}`);
                 }
-                
+
                 for (let i = 0; i < frameworks.length; i++) {
                     const fw = frameworks[i];
                     if (completed.includes(fw.name)) continue;
-                    
+
                     logToTerminal(`Phase 1: Generating deep dive for ${fw.name} (${i + 1}/${frameworks.length})...`);
-                    
+
                     const diveRes = await fetch(`/api/project/${projectName}/generate_s6`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -399,23 +444,23 @@ function initGeneratorEvents() {
                             custom_instructions: state.customInstructions
                         })
                     });
-                    
+
                     const diveData = await diveRes.json();
                     if (!diveRes.ok) {
                         logToTerminal(`Generation paused or failed at ${fw.name}.`);
                         throw new Error(diveData.error || `Failed on framework ${fw.name}`);
                     }
-                    
+
                     if (diveData.skipped) {
                         logToTerminal(`[Skipped] ${fw.name} already completed.`);
                     } else {
                         logToTerminal(`[Saved] Deep dive for ${fw.name} completed.`);
                     }
                 }
-                
+
                 logToTerminal(`Success! All frameworks for Section 6 analyzed and saved.`);
                 state.status = 'completed';
-                
+
             } else if (secId >= 100) {
                 // --- CUSTOM SECTION GENERATION ---
                 const secObj = SECTIONS.find(s => s.id === secId);
@@ -452,11 +497,11 @@ function initGeneratorEvents() {
                         custom_instructions: state.customInstructions
                     })
                 });
-                
+
                 logToTerminal(`Received response from backend.`);
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Failed to generate');
-                
+
                 if (data.passes && Array.isArray(data.passes)) {
                     data.passes.forEach(p => {
                         logToTerminal(`  Pass ${p.pass}: ${p.info}`);
@@ -468,7 +513,7 @@ function initGeneratorEvents() {
                         }
                     });
                 }
-                
+
                 logToTerminal(`Success! Section ${secId} saved to project DB.`);
                 state.status = 'completed';
             }
@@ -480,7 +525,7 @@ function initGeneratorEvents() {
             updateProgressRing();
             throw err;
         }
-        
+
         renderNodes();
         updateProgressRing();
         if (activeSection === secId) openPanel(secId);
@@ -493,8 +538,8 @@ function initGeneratorEvents() {
             if (!activeSection) return;
             const btn = genRegenerateBtn;
             btn.disabled = true;
-            try { await executeGeneration(activeSection); } 
-            catch(e) { /* error already logged */ }
+            try { await executeGeneration(activeSection); }
+            catch (e) { /* error already logged */ }
             finally { btn.disabled = false; }
         });
     }
@@ -514,7 +559,7 @@ function initGeneratorEvents() {
                     }
                 }
                 logToTerminal('Generate All completed successfully.');
-            } catch(e) {
+            } catch (e) {
                 logToTerminal('Generate All aborted due to an error.');
             } finally {
                 btn.disabled = false;
@@ -529,8 +574,8 @@ function initGeneratorEvents() {
             if (!activeSection) return;
             const btn = genSectionBtn;
             btn.disabled = true;
-            try { await executeGeneration(activeSection); } 
-            catch(e) { /* error already logged */ }
+            try { await executeGeneration(activeSection); }
+            catch (e) { /* error already logged */ }
             finally { btn.disabled = false; }
         });
     }
@@ -554,7 +599,7 @@ async function loadApiKeys() {
             renderApiKeys();
             updateKeyDropdowns();
         }
-    } catch(e) {
+    } catch (e) {
         console.error('Failed to load API keys:', e);
     }
 }
@@ -563,8 +608,8 @@ async function addApiKey(name, provider, key) {
     try {
         const res = await fetch('/api/config/llm_keys', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name, provider, key})
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, provider, key })
         });
         if (res.ok) {
             await loadApiKeys();
@@ -596,7 +641,7 @@ function renderApiKeys() {
     `).join('');
 }
 
-window.deleteApiKey = async function(index) {
+window.deleteApiKey = async function (index) {
     try {
         const res = await fetch(`/api/config/llm_keys/${index}`, {
             method: 'DELETE'
@@ -614,12 +659,20 @@ window.deleteApiKey = async function(index) {
 function updateKeyDropdowns() {
     const commonSelect = document.getElementById('commonSavedKeySelect');
     const genSelect = document.getElementById('genSavedKeySelect');
-    
-    const optionsHTML = '<option value="">-- Select Saved Key --</option>' + 
+
+    const optionsHTML = '<option value="">-- Select Saved Key --</option>' +
         savedApiKeys.map((k, i) => `<option value="saved_${i}">${escapeHtml(k.name)} (${escapeHtml(k.provider)})</option>`).join('');
-        
-    if (commonSelect) commonSelect.innerHTML = optionsHTML;
-    if (genSelect) genSelect.innerHTML = optionsHTML;
+
+    if (commonSelect) {
+        commonSelect.innerHTML = optionsHTML;
+        if (currentCommonApiKey) commonSelect.value = currentCommonApiKey;
+    }
+    if (genSelect) {
+        genSelect.innerHTML = optionsHTML;
+        if (activeSection && sectionStates[activeSection]) {
+            syncPanelKeyDisplay(sectionStates[activeSection]);
+        }
+    }
 }
 
 function initApiKeysEvents() {
@@ -630,7 +683,7 @@ function initApiKeysEvents() {
             const provider = document.getElementById('newKeyProvider').value;
             const key = document.getElementById('newKeyValue').value.trim();
             if (!name || !key) {
-                showToast('Please provide a name and API key.', 'warning');                return;
+                showToast('Please provide a name and API key.', 'warning'); return;
             }
             addBtn.disabled = true;
             await addApiKey(name, provider, key);
@@ -639,7 +692,7 @@ function initApiKeysEvents() {
             addBtn.disabled = false;
         });
     }
-    
+
     const commonSelect = document.getElementById('commonSavedKeySelect');
     if (commonSelect) {
         commonSelect.addEventListener('change', (e) => {
@@ -649,15 +702,21 @@ function initApiKeysEvents() {
                 const k = savedApiKeys[idx];
                 // Show masked key for display, but store saved_N reference for API calls
                 document.getElementById('commonApiKey').value = k.key;
-                
-                // Sync to all sections — use saved_N reference so backend can decrypt
+
+                // Update tracked common key
+                currentCommonApiKey = val;
+                currentCommonProvider = k.provider;
+
+                // Sync to sections that DON'T have a per-section override
                 SECTIONS.forEach(sec => {
-                    sectionStates[sec.id].apiKey = val;
-                    sectionStates[sec.id].provider = k.provider;
+                    if (!sectionKeyOverrides.has(sec.id)) {
+                        sectionStates[sec.id].apiKey = val;
+                        sectionStates[sec.id].provider = k.provider;
+                    }
                 });
-                if (activeSection) {
-                    document.getElementById('genApiKey').value = k.key;
-                    document.getElementById('genProvider').value = k.provider;
+                // Update the per-section panel display only if the active section is NOT overridden
+                if (activeSection && !sectionKeyOverrides.has(activeSection)) {
+                    syncPanelKeyDisplay(sectionStates[activeSection]);
                 }
             }
         });
@@ -667,15 +726,21 @@ function initApiKeysEvents() {
     if (commonKeyInput) {
         commonKeyInput.addEventListener('input', (e) => {
             const val = e.target.value;
+            // Update tracked common key
+            currentCommonApiKey = val;
+
+            // Only sync to sections that DON'T have a per-section override
             SECTIONS.forEach(sec => {
-                sectionStates[sec.id].apiKey = val;
+                if (!sectionKeyOverrides.has(sec.id)) {
+                    sectionStates[sec.id].apiKey = val;
+                }
             });
-            if (activeSection) {
-                document.getElementById('genApiKey').value = val;
+            if (activeSection && !sectionKeyOverrides.has(activeSection)) {
+                syncPanelKeyDisplay(sectionStates[activeSection]);
             }
         });
     }
-    
+
     const genSelect = document.getElementById('genSavedKeySelect');
     if (genSelect) {
         genSelect.addEventListener('change', (e) => {
@@ -685,9 +750,21 @@ function initApiKeysEvents() {
                 const k = savedApiKeys[idx];
                 // Show masked key for display, but store saved_N reference for API calls
                 document.getElementById('genApiKey').value = k.key;
-                if (activeSection) sectionStates[activeSection].apiKey = val;
                 document.getElementById('genProvider').value = k.provider;
-                if (activeSection) sectionStates[activeSection].provider = k.provider;
+                if (activeSection) {
+                    sectionStates[activeSection].apiKey = val;
+                    sectionStates[activeSection].provider = k.provider;
+                    if (val === currentCommonApiKey) {
+                        sectionKeyOverrides.delete(activeSection);
+                    } else {
+                        sectionKeyOverrides.add(activeSection);
+                    }
+                }
+            } else {
+                if (activeSection) {
+                    sectionStates[activeSection].apiKey = '';
+                    document.getElementById('genApiKey').value = '';
+                }
             }
         });
     }
@@ -702,7 +779,7 @@ if (document.readyState === 'loading') {
     initApiKeysEvents();
 }
 
-window.logToTerminal = function(msg) {
+window.logToTerminal = function (msg) {
     const term = document.getElementById('genTerminal');
     const content = document.getElementById('genTerminalContent');
     if (term && content) {
@@ -710,16 +787,16 @@ window.logToTerminal = function(msg) {
         const line = document.createElement('div');
         line.className = 'gen-terminal-line';
         const now = new Date();
-        const timeStr = now.getHours().toString().padStart(2,'0') + ':' + 
-                        now.getMinutes().toString().padStart(2,'0') + ':' + 
-                        now.getSeconds().toString().padStart(2,'0');
+        const timeStr = now.getHours().toString().padStart(2, '0') + ':' +
+            now.getMinutes().toString().padStart(2, '0') + ':' +
+            now.getSeconds().toString().padStart(2, '0');
         line.innerHTML = `<span class="gen-terminal-time">[${timeStr}]</span> ${escapeHtml(msg)}`;
         content.appendChild(line);
         content.scrollTop = content.scrollHeight;
     }
 };
 
-window.syncGeneratedStatus = function(completedIds) {
+window.syncGeneratedStatus = function (completedIds) {
     SECTIONS.forEach(sec => {
         if (completedIds.includes(sec.id)) {
             sectionStates[sec.id].status = 'completed';

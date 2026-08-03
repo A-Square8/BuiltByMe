@@ -550,7 +550,9 @@ def generate_section(project_name):
         return jsonify({'message': 'Success', 'content': content, 'passes': passes_log})
     except Exception as e:
         app.logger.error(f'Section generation error: {traceback_module.format_exc()}')
-        return jsonify({'error': 'Section generation failed. Check server logs for details.'}), 500
+        with open('server_errors.log', 'a') as ef:
+            ef.write(f"--- [Section {section_id}] ---\n{traceback_module.format_exc()}\n")
+        return jsonify({'error': f'Section {section_id} generation failed: {str(e)}'}), 500
     finally:
         db.close()
 
@@ -789,7 +791,9 @@ def generate_section6(project_name):
 
     except Exception as e:
         app.logger.error(f'Section 6 generation error: {traceback_module.format_exc()}')
-        return jsonify({'error': 'Section 6 generation failed. Check server logs for details.'}), 500
+        with open('server_errors.log', 'a') as ef:
+            ef.write(f"--- [Section 6 ({phase})] ---\n{traceback_module.format_exc()}\n")
+        return jsonify({'error': f'Section 6 generation failed: {str(e)}'}), 500
     finally:
         db.close()
 
@@ -1737,7 +1741,9 @@ def generate_pdf(project_name):
         )
     except Exception as e:
         app.logger.error(f'PDF generation error: {traceback_module.format_exc()}')
-        return jsonify({'error': 'PDF generation failed. Check server logs for details.'}), 500
+        with open('server_errors.log', 'a') as ef:
+            ef.write(f"--- [PDF] ---\n{traceback_module.format_exc()}\n")
+        return jsonify({'error': f'PDF generation failed: {str(e)}'}), 500
     finally:
         db.close()
 
@@ -1816,7 +1822,9 @@ def generate_markdown(project_name):
         )
     except Exception as e:
         app.logger.error(f'Markdown export error: {traceback_module.format_exc()}')
-        return jsonify({'error': 'Markdown export failed. Check server logs for details.'}), 500
+        with open('server_errors.log', 'a') as ef:
+            ef.write(f"--- [Markdown] ---\n{traceback_module.format_exc()}\n")
+        return jsonify({'error': f'Markdown export failed: {str(e)}'}), 500
     finally:
         db.close()
 

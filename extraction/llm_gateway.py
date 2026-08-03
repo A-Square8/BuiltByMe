@@ -32,7 +32,7 @@ def get_llm_client(provider: str, api_key: str, temperature: float = 0.2) -> Bas
             from langchain_google_genai import ChatGoogleGenerativeAI
             return ChatGoogleGenerativeAI(
                 api_key=api_key,
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash-lite",
                 temperature=temperature
             )
         elif provider == 'nvidia':
