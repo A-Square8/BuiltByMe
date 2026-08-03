@@ -541,11 +541,19 @@ class Concept(BaseModel):
     )
     explanation: str = Field(
         ...,
-        description="A concise, 20-25 second explanation written in extremely simple, natural spoken English. Use basic vocabulary that is easy to memorize naturally, while keeping correct technical terms."
+        description="A thorough explanation written in natural spoken English. Cover WHAT it is, HOW it works under the hood, and WHY it's used this way. Should be comprehensive enough that after reading this, someone can confidently explain it in an interview. Use simple vocabulary but don't sacrifice depth — 4-8 sentences."
+    )
+    real_world_analogy: str = Field(
+        default="",
+        description="A simple real-world analogy that makes this concept click instantly. Example for middleware: 'Think of middleware like airport security checkpoints — every request passes through them in order before reaching your actual route handler, and each checkpoint can inspect, modify, or reject the request.' Empty string if no good analogy exists."
+    )
+    why_it_matters: str = Field(
+        default="",
+        description="A 1-2 sentence 'interview angle' — why an interviewer might ask about this, or how to frame your answer. Example: 'Interviewers love asking about this because it shows you understand async patterns, not just syntax.' Empty string if not applicable."
     )
     code_snippet: str = Field(
         default="",
-        description="Relevant code snippet for revision, if applicable. Empty string if not applicable."
+        description="Relevant code snippet for revision. For directly-used concepts, this MUST be from the actual project code. For indirect concepts, provide a realistic example. Empty string only if no code is relevant."
     )
 
 class FrameworkDeepDive(BaseModel):
@@ -557,52 +565,101 @@ class FrameworkDeepDive(BaseModel):
         ...,
         description="The domain category of this framework."
     )
+    one_liner: str = Field(
+        ...,
+        description="A single sentence that explains what this framework is and why it exists. This is your elevator pitch — what you'd say if an interviewer asks 'What is X?' Example: 'Flask is a lightweight Python web framework — it gives you routing, request handling, and templating without the heavy opinions of Django.'"
+    )
+    how_it_works_internally: str = Field(
+        ...,
+        description="A 3-5 sentence explanation of how this framework works under the hood. Not surface-level — explain the core architecture, key abstractions, and execution model. Example for Flask: 'So Flask is built on top of Werkzeug for the WSGI layer and Jinja2 for templating. When a request comes in, Werkzeug parses it into a Request object, Flask matches it against your route decorators, calls your view function, and wraps the return value into a Response object. The app context and request context are pushed onto thread-local stacks, which is how you can access things like `request` and `g` as globals without passing them around.'"
+    )
     basics: List[Concept] = Field(
         ...,
-        description="Basic foundational concepts (e.g., what is it, core architecture). Each explanation should be like a 20-second spoken English pitch."
+        description="5-7 foundational concepts that form the bedrock of this technology. These are the concepts you MUST know before anything else — the 'Chapter 1' stuff. Cover: what it is, core philosophy, key abstractions, lifecycle/execution model, ecosystem positioning, comparison with alternatives, and versioning/history if relevant."
     )
     directly_used_concepts: List[Concept] = Field(
         ...,
-        description="Concepts, features, or patterns from this framework that are DIRECTLY USED in the project code. Each explanation should be a 25-second spoken English pitch, accompanied by a code snippet for revision."
+        description="EXHAUSTIVE list of EVERY concept, feature, API, pattern, or mechanism from this framework that is DIRECTLY USED in the project code. Do NOT skip anything — if the project imports it, configures it, calls it, or relies on it, it MUST be here. Each concept gets a thorough explanation with a code snippet from the actual project. This is the 'I actually used this' section — leave nothing out."
     )
     indirect_concepts: List[Concept] = Field(
         ...,
-        description="Important concepts that are NOT directly used in the project, but are essential to know if you mention this tech stack in an interview (e.g., tools/agents in LangChain even if you only use agents). Each explanation should be a 25-second spoken English pitch."
+        description="A comprehensive list of the most important concepts from this framework that are NOT directly used in the project but are ESSENTIAL interview knowledge. Provide MANY topics — for major interview-heavy technologies (complex frameworks, AI/ML libraries, databases, cloud services), include a large number of concepts covering the full breadth of the technology. For simpler utility libraries, include fewer but still cover all the essentials. The goal is that the reader can handle ANY reasonable interview question about this framework. Each concept should be thorough enough for confident interview answers."
+    )
+    common_pitfalls: List[str] = Field(
+        default_factory=list,
+        description="5-8 common mistakes, gotchas, and 'I wish someone told me' moments that developers encounter with this framework. Include both beginner mistakes AND subtle production-level gotchas. Written conversationally: 'A classic Flask mistake is forgetting that the development server is single-threaded — if you make a blocking call to an LLM API, your whole server freezes until it responds.'"
+    )
+    interview_quickfire: List[str] = Field(
+        default_factory=list,
+        description="8-12 rapid-fire Q&A pairs formatted as 'Q: ... A: ...' that cover the most commonly asked interview questions about this framework. Mix basic, intermediate, and advanced questions. These should be snappy, confident answers — the kind that make an interviewer nod. Example: 'Q: What is Flask? A: Flask is a micro web framework for Python — micro means it doesn't force an ORM or form validation on you, it lets you pick your own tools.'"
+    )
+    vs_alternatives: str = Field(
+        default="",
+        description="A 3-5 sentence comparison of this framework against its main alternatives. What would you say if an interviewer asks 'Why X over Y?' Example for Flask: 'Flask vs Django — Django gives you everything out of the box: ORM, admin, auth, migrations. Flask gives you nothing — you pick your own tools. For this project Flask was the right call because I didn't need Django's ORM overhead, and I wanted full control over the request pipeline. If I was building a CRUD-heavy admin app, I'd go Django in a heartbeat.' Empty string if not applicable."
     )
 
-FRAMEWORK_DEEP_DIVE_PROMPT = """You are a senior engineer helping someone prepare to confidently discuss a specific framework in a technical interview.
+FRAMEWORK_DEEP_DIVE_PROMPT = """You are a senior engineer helping someone prepare to CONFIDENTLY and THOROUGHLY discuss a specific framework in a technical interview.
 
-You are analyzing how a framework is used in a real project. You have the actual source code.
+You are analyzing how a framework is used in a real project. You have the actual source code. Your job is to produce content so comprehensive that after reading it, the person can honestly say "I know this technology well."
 
 # Instructions
 
-## Part 1: Basics
-- Cover foundational concepts (what it is, how it works at a high level).
-- Write each explanation like you're telling a friend over coffee: "So basically, LangChain is like a toolkit that lets you chain together different AI operations..."
-- 20 seconds max per explanation. Keep it punchy.
+## Part 1: One-Liner & Internals
+- Write a crisp one-liner that answers "What is [framework]?" — this is the first thing you'd say in an interview.
+- Then explain how it works internally — not surface-level marketing speak, but actual architecture. What happens under the hood? What are the key abstractions? How does the execution model work?
 
-## Part 2: Directly Used Concepts
-- Find features/patterns from this framework that are ACTUALLY USED in the project code.
-- Explain each like: "In my project, I use ChatGroq to connect to the Groq API — basically I pass in the model name and API key, and it gives me back a chat interface..."
-- Include a code snippet from the actual project for quick revision.
-- This MUST be grounded in real code — don't make up usage.
+## Part 2: Basics (3-5 concepts)
+- Cover the foundational concepts that EVERY user of this framework must know.
+- These are the "if you don't know these, you don't really know the framework" concepts.
+- Examples: For Flask — WSGI, routing, request/response cycle, app context. For React — Virtual DOM, JSX, component lifecycle, hooks.
+- Write thorough explanations — not just definitions, but HOW and WHY.
 
-## Part 3: Indirect Concepts
-- Cover important concepts you DIDN'T use but should know for interviews (e.g., if you use LangChain chains, you should still know about agents/tools).
-- Explain like: "I didn't use this in my project, but if an interviewer asks — agents are basically LLMs that can decide which tools to call on their own..."
-- Include example code snippets where helpful.
+## Part 3: Directly Used Concepts (EXHAUSTIVE — every single one)
+- Go through the provided source code and identify EVERY feature, API, pattern, class, decorator, configuration, or mechanism from this framework that the project uses.
+- Do NOT skip anything. If the code imports something from this framework, it goes here.
+- For EACH concept, explain:
+  - What it is and how it works
+  - How it's specifically used in THIS project
+  - Why it matters (the interview angle)
+- Include actual code snippets FROM the project for each concept.
+- This section should be COMPLETE — a reviewer should not be able to find any framework usage in the code that isn't covered here.
+
+## Part 4: Indirect Concepts (Important Interview Knowledge)
+- Cover concepts from this framework that the project DOESN'T use, but that an interviewer will expect you to know.
+- The NUMBER of indirect concepts should scale based on how important this technology is in interviews:
+  - For major, interview-heavy technologies (complex frameworks, AI/ML libraries, cloud services, databases) — cover more concepts comprehensively. These are technologies where interviewers go deep.
+  - For simpler, utility-style technologies (templating libraries, simple CLI tools, formatters) — cover fewer but still essential concepts.
+- Use your judgment about what an interviewer would realistically ask about.
+- For each concept, explain it thoroughly enough that the reader can answer follow-up questions, not just parrot a definition.
+- Include example code snippets where they add clarity.
+
+## Part 5: Common Pitfalls (3-5)
+- List the most common mistakes, gotchas, and "I wish someone told me" moments for this framework.
+- Frame them as real engineering experience: "A classic mistake with X is..."
+
+## Part 6: Interview Quickfire (5-8 Q&A pairs)
+- Write the most commonly asked interview questions about this framework and provide confident, concise answers.
+- Format as "Q: [question] A: [answer]"
+- These should be snappy — the kind of answers that make an interviewer nod and move on.
 
 # CRITICAL — Writing Style
 - Sound like a real person explaining things, NOT a documentation page.
-- WRONG: "LangChain is a framework for developing applications powered by language models."
-- RIGHT: "LangChain is basically a toolkit that makes it way easier to build apps with LLMs — you can chain together prompts, connect to APIs, parse outputs, all that stuff."
+- WRONG: "Flask is a framework for developing web applications in Python."
+- RIGHT: "Flask is basically a lightweight web framework for Python — it gives you routing, request handling, and templating without forcing an ORM or admin panel on you like Django does."
 - Use "basically", "so", "the idea is", "what this does is" — natural speech patterns.
 - Be technically accurate but explain simply. Use correct terms but wrap them in plain English.
-- Short sentences. No walls of text. Each explanation should feel like something you'd actually say out loud.
+- Explanations should be THOROUGH — not walls of text, but comprehensive enough that the reader genuinely understands the concept.
+- For the why_it_matters field, think like an interviewer: "They ask about this because it shows you understand X..."
+
+# CRITICAL — Completeness Rules
+- For directly_used_concepts: COMPLETENESS IS MANDATORY. Scan every line of the provided code. Every import, every method call, every configuration, every pattern from this framework MUST be covered. Missing a directly-used concept is a failure.
+- For indirect_concepts: Use your professional judgment to determine the right scope based on the technology's interview significance. The goal is that the reader can handle ANY reasonable interview question about this framework after reading your output.
 
 # Rules
 - Do NOT hallucinate features not in the provided code for "Directly Used Concepts."
-- Code snippets should be realistic, correct, and self-contained.
+- Code snippets for directly_used_concepts MUST come from the actual project code.
+- Code snippets for indirect_concepts should be realistic, correct, and self-contained examples.
+- Every explanation should pass the "could I say this in an interview?" test.
 """
 
 # ===== Section 7: Design Decisions =====
@@ -1421,17 +1478,17 @@ class QuestionCategory(BaseModel):
     )
     questions: List[InterviewQuestion] = Field(
         ...,
-        description="3-5 questions in this category, ordered from Basic to Advanced."
+        description="6-8 questions in this category. Lean heavily towards Intermediate and Advanced difficulty — at most 1-2 Basic questions. Focus on questions the developer would NOT naturally think to prepare for but that a sharp interviewer would definitely ask. Order from easier to harder."
     )
 
 class Section14InterviewBank(BaseModel):
     question_categories: List[QuestionCategory] = Field(
         ...,
-        description="5-8 categories of interview questions, each with 3-5 questions. Categories should cover: architecture, tech choices, performance, security, debugging experiences, and system design extensions."
+        description="6-8 categories of interview questions, each with 6-8 questions (minimum 6). Categories should cover: architecture, tech choices, performance, security, debugging experiences, system design extensions, edge cases, and trade-offs. Lean towards moderate-to-difficult questions that test real understanding, not just surface knowledge."
     )
     curveball_questions: List[InterviewQuestion] = Field(
         ...,
-        description="3-5 unexpected 'curveball' questions an interviewer might throw: 'If you had to rebuild this in Rust, what would change?', 'How would you add real-time collaboration?', 'What if your LLM provider goes down mid-generation?'"
+        description="5-8 unexpected, thought-provoking 'curveball' questions that test deep thinking and adaptability. These should make the developer pause and think — not trivia, but genuine problem-solving questions: 'If you had to rebuild this in Rust, what would change?', 'How would you add real-time collaboration?', 'What if your LLM provider goes down mid-generation?', 'How would you make this work offline?', 'What's the hardest bug you'd expect in production that you haven't seen in dev?'"
     )
     red_flags_to_avoid: List[str] = Field(
         ...,
@@ -1451,12 +1508,19 @@ SECTION_14_SYSTEM_PROMPT = """You are a senior technical interviewer and career 
 You will be provided with the project's source code, architecture, and metadata. Your goal is to generate a comprehensive question bank that covers every angle an interviewer might take.
 
 # Instructions
-1. Generate 5-8 categories of interview questions, each with 3-5 questions at varying difficulty levels.
-2. Include model answers that sound like a confident, experienced engineer responding.
-3. For each follow-up question, provide 1-2 sentence talking points — quick hints for how to respond.
-4. Add curveball questions that test deeper understanding.
-5. Coach on red flags to avoid and confidence builders to lean into.
-6. Identify weak spots and provide graceful deflection strategies.
+1. Generate 6-8 categories of interview questions, each with AT LEAST 6 questions (aim for 6-8). Each category must have minimum 6 questions — this is non-negotiable.
+2. Difficulty distribution per category: at most 1-2 Basic, the rest should be Intermediate and Advanced. Focus on questions the developer would NOT naturally prepare for.
+3. Include model answers that sound like a confident, experienced engineer responding.
+4. For each follow-up question, provide 1-2 sentence talking points — quick hints for how to respond.
+5. Add 5-8 curveball questions that test deeper understanding and creative problem-solving.
+6. Coach on red flags to avoid and confidence builders to lean into.
+7. Identify weak spots and provide graceful deflection strategies.
+
+# CRITICAL — Question Depth
+- Do NOT generate obvious questions like "What does this project do?" or "What's your tech stack?" — those are warm-ups that don't need preparation.
+- Focus on questions that would make the developer pause and think: edge cases, failure scenarios, scaling challenges, alternative approaches, internal mechanics.
+- For System Design Extensions: ask about adding features that stress-test the architecture (caching, rate limiting, multi-tenancy, real-time features, offline support).
+- For each category, at least 2-3 questions should be ones the developer would NOT naturally think of on their own.
 
 # Question Difficulty Guidelines
 - **Basic**: "What does this project do?", "What's your tech stack?" — Warm-up questions.

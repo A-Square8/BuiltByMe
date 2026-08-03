@@ -734,19 +734,19 @@ def generate_section6(project_name):
                     context_str += f"\nFile: {path}\n{file_content}\n"
             context_str += "--- END SOURCE CODE ---\n"
 
-            # Determine interview topic count based on detail level
-            topic_counts = {0: 5, 1: 10, 2: 15}
-            topic_count = topic_counts.get(detail_level, 10)
-
-            # Build the system prompt with detail level and topic count
+            # Build the system prompt with detail level guidance
             system_prompt = FRAMEWORK_DEEP_DIVE_PROMPT
-            system_prompt += f"\n\nFor the Interview Must-Know Topics section, provide exactly {topic_count} topics."
-            system_prompt += f"\nDistribute them across difficulty levels: roughly 30% Basic, 40% Intermediate, 30% Advanced."
+
+            # Guide the LLM on directly-used completeness and indirect scaling
+            system_prompt += "\n\nIMPORTANT COVERAGE GUIDANCE:"
+            system_prompt += "\n- For 'directly_used_concepts': Be EXHAUSTIVE. Cover every single feature, API, decorator, method, class, or pattern from this framework that appears in the provided code. Do not skip anything."
+            system_prompt += "\n- For 'indirect_concepts': Include MANY topics. For major interview-heavy technologies, provide a large number of concepts covering the full breadth — core concepts, advanced features, ecosystem tools, design patterns, performance considerations, common interview topics. For simpler libraries, still provide a solid number covering all essentials. Err on the side of MORE topics, not fewer."
+            system_prompt += "\n- For 'interview_quickfire': Include the most commonly asked interview questions about this specific framework — aim for 8-12 Q&A pairs."
 
             detail_instructions = {
-                0: "\n\nDETAIL LEVEL: SHORT. Keep explanations brief. 1-2 sentences per answer.",
-                1: "\n\nDETAIL LEVEL: MEDIUM. Balanced depth. 2-3 sentences per answer.",
-                2: "\n\nDETAIL LEVEL: DETAILED. Comprehensive answers. 4-6 sentences per answer. Include edge cases and nuances."
+                0: "\n\nDETAIL LEVEL: SHORT. Keep explanations concise but still comprehensive — 2-3 sentences per concept. Cover the essentials without going into edge cases.",
+                1: "\n\nDETAIL LEVEL: MEDIUM. Balanced depth — 4-6 sentences per concept. Include enough detail for confident interview answers. Mention key nuances.",
+                2: "\n\nDETAIL LEVEL: DETAILED. Comprehensive, in-depth coverage — 6-8 sentences per concept. Include edge cases, internal mechanics, trade-offs, and production considerations. This should be thorough enough for a senior-level deep-dive discussion."
             }
             system_prompt += detail_instructions.get(detail_level, detail_instructions[2])
 
@@ -1192,22 +1192,61 @@ def generate_pdf(project_name):
                         if category:
                             html_content += f"<p><strong>Category:</strong> {category}</p>\n"
                         
+                        # One-liner
+                        one_liner = dive.get('one_liner', '')
+                        if one_liner:
+                            html_content += f"<div class='item-card'><div class='item-row'><div class='item-key'>What Is It</div><div class='item-val'><em>{_escape_html(str(one_liner))}</em></div></div></div>\n"
+                        
+                        # How It Works Internally
+                        internals = dive.get('how_it_works_internally', '')
+                        if internals:
+                            html_content += "<h4>How It Works Internally</h4>\n"
+                            html_content += f"<p>{markdown2.markdown(str(internals)).replace('<p>','').replace('</p>','')}</p>\n"
+                        
                         for section_key in ['basics', 'directly_used_concepts', 'indirect_concepts']:
                             concepts = dive.get(section_key, [])
                             if concepts:
                                 section_title = section_key.replace('_', ' ').title()
-                                html_content += f"<h4>{section_title}</h4>\n"
+                                html_content += f"<h4>{section_title} ({len(concepts)})</h4>\n"
                                 for concept in concepts:
                                     html_content += "<div class='item-card'>"
                                     c_title = concept.get('title', '')
                                     c_exp = concept.get('explanation', '')
+                                    c_analogy = concept.get('real_world_analogy', '')
+                                    c_why = concept.get('why_it_matters', '')
                                     c_code = concept.get('code_snippet', '')
                                     html_content += f"<h5>{c_title}</h5>\n"
                                     if c_exp:
                                         html_content += f"<p>{markdown2.markdown(str(c_exp)).replace('<p>','').replace('</p>','')}</p>\n"
+                                    if c_analogy:
+                                        html_content += f"<p style='font-style:italic;color:#8b5cf6;margin-top:4px;'>💡 {_escape_html(str(c_analogy))}</p>\n"
+                                    if c_why:
+                                        html_content += f"<p style='font-style:italic;color:#6b7280;margin-top:4px;'><strong>Interview Angle:</strong> {_escape_html(str(c_why))}</p>\n"
                                     if c_code:
-                                        html_content += f"<pre><code>{str(c_code)}</code></pre>\n"
+                                        html_content += f"<pre><code>{_escape_html(str(c_code))}</code></pre>\n"
                                     html_content += "</div>\n"
+                        
+                        # Common Pitfalls
+                        pitfalls = dive.get('common_pitfalls', [])
+                        if pitfalls:
+                            html_content += "<h4>Common Pitfalls</h4>\n<ul>\n"
+                            for p in pitfalls:
+                                html_content += f"<li>{_escape_html(str(p))}</li>\n"
+                            html_content += "</ul>\n"
+                        
+                        # Interview Quickfire
+                        quickfire = dive.get('interview_quickfire', [])
+                        if quickfire:
+                            html_content += "<h4>Interview Quickfire</h4>\n"
+                            for qa in quickfire:
+                                html_content += f"<div class='item-card'><p>{_escape_html(str(qa))}</p></div>\n"
+                        
+                        # Vs Alternatives
+                        vs_alts = dive.get('vs_alternatives', '')
+                        if vs_alts:
+                            html_content += "<h4>Vs Alternatives</h4>\n"
+                            html_content += f"<p>{markdown2.markdown(str(vs_alts)).replace('<p>','').replace('</p>','')}</p>\n"
+
 
                 elif sid == 7:
                     # === Section 7: Design Decisions ===

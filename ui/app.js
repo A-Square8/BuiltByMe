@@ -663,6 +663,19 @@ function renderSection6Preview(deepDives) {
             ${category ? `<span class="preview-badge preview-badge-purple">${escapeHtml(category)}</span>` : ''}
         </div>`;
 
+        // One-liner
+        const oneLiner = fw.one_liner || '';
+        if (oneLiner) {
+            html += `<div style="background:rgba(255,255,255,0.04);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:14px;border-left:3px solid var(--text-muted);font-style:italic;color:var(--text-secondary);font-size:13px;line-height:1.6;">${escapeHtml(oneLiner)}</div>`;
+        }
+
+        // How It Works Internally
+        const internals = fw.how_it_works_internally || '';
+        if (internals) {
+            html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--purple-400);margin-bottom:8px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> How It Works Internally</div>`;
+            html += `<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;padding:10px 14px;background:rgba(168,85,247,0.06);border-radius:var(--radius-sm);">${escapeHtml(internals)}</div></div>`;
+        }
+
         // Basics
         if (fw.basics && fw.basics.length > 0) {
             html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--green-500);margin-bottom:8px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg> Basics <span class="preview-badge preview-badge-green" style="margin-left:6px;">${fw.basics.length}</span></div>`;
@@ -683,11 +696,38 @@ function renderSection6Preview(deepDives) {
 
         // Indirect Concepts
         if (fw.indirect_concepts && fw.indirect_concepts.length > 0) {
-            html += `<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--blue-500);margin-bottom:8px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg> Indirect / Interview Knowledge <span class="preview-badge preview-badge-blue" style="margin-left:6px;">${fw.indirect_concepts.length}</span></div>`;
+            html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--blue-500);margin-bottom:8px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg> Indirect / Interview Knowledge <span class="preview-badge preview-badge-blue" style="margin-left:6px;">${fw.indirect_concepts.length}</span></div>`;
             fw.indirect_concepts.forEach(concept => {
                 html += renderConceptCard(concept, 'rgba(59,130,246,0.08)', 'var(--blue-500)');
             });
             html += '</div>';
+        }
+
+        // Common Pitfalls
+        const pitfalls = fw.common_pitfalls || [];
+        if (pitfalls.length > 0) {
+            html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--red-400, #f87171);margin-bottom:8px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Common Pitfalls <span class="preview-badge" style="margin-left:6px;background:rgba(248,113,113,0.15);color:#f87171;">${pitfalls.length}</span></div>`;
+            pitfalls.forEach(p => {
+                html += `<div style="background:rgba(248,113,113,0.06);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:6px;border-left:3px solid #f87171;font-size:13px;color:var(--text-secondary);line-height:1.6;">${escapeHtml(p)}</div>`;
+            });
+            html += '</div>';
+        }
+
+        // Interview Quickfire
+        const quickfire = fw.interview_quickfire || [];
+        if (quickfire.length > 0) {
+            html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--yellow-400, #facc15);margin-bottom:8px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Interview Quickfire <span class="preview-badge" style="margin-left:6px;background:rgba(250,204,21,0.15);color:#facc15;">${quickfire.length}</span></div>`;
+            quickfire.forEach(qa => {
+                html += `<div style="background:rgba(250,204,21,0.06);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:6px;border-left:3px solid #facc15;font-size:13px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap;">${escapeHtml(qa)}</div>`;
+            });
+            html += '</div>';
+        }
+
+        // Vs Alternatives
+        const vsAlts = fw.vs_alternatives || '';
+        if (vsAlts) {
+            html += `<div style="margin-bottom:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--cyan-400, #22d3ee);margin-bottom:8px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Vs Alternatives</div>`;
+            html += `<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;padding:10px 14px;background:rgba(34,211,238,0.06);border-radius:var(--radius-sm);border-left:3px solid #22d3ee;">${escapeHtml(vsAlts)}</div></div>`;
         }
 
         html += '</div>';
@@ -698,11 +738,20 @@ function renderSection6Preview(deepDives) {
 function renderConceptCard(concept, bgColor, accentColor) {
     const title = concept.title || concept.name || 'Concept';
     const explanation = concept.explanation || '';
+    const analogy = concept.real_world_analogy || '';
+    const whyItMatters = concept.why_it_matters || '';
     const codeSnippet = concept.code_snippet || '';
+    const hasMore = analogy || whyItMatters || codeSnippet;
     let html = `<div style="background:${bgColor};border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;border-left:3px solid ${accentColor};">`;
     html += `<div style="font-weight:700;font-size:13px;color:${accentColor};margin-bottom:6px;">${escapeHtml(title)}</div>`;
     if (explanation) {
-        html += `<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:${codeSnippet ? '8' : '0'}px;">${escapeHtml(explanation)}</div>`;
+        html += `<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:${hasMore ? '8' : '0'}px;">${escapeHtml(explanation)}</div>`;
+    }
+    if (analogy) {
+        html += `<div style="font-size:12px;color:var(--text-dim);line-height:1.5;margin-bottom:${(whyItMatters || codeSnippet) ? '8' : '0'}px;">💡 <em>${escapeHtml(analogy)}</em></div>`;
+    }
+    if (whyItMatters) {
+        html += `<div style="font-size:12px;color:var(--text-dim);font-style:italic;line-height:1.5;margin-bottom:${codeSnippet ? '8' : '0'}px;">🎯 ${escapeHtml(whyItMatters)}</div>`;
     }
     if (codeSnippet) {
         html += `<pre style="background:#0d0d10;color:#d4d4d4;padding:10px 14px;border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;margin-top:4px;max-height:200px;overflow-y:auto;">${escapeHtml(codeSnippet)}</pre>`;
